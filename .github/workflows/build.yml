@@ -1,5 +1,5 @@
-# Builds the APK on each push to main and each pull request from this repository, and publishes a release for each
-# v* tag. The recompiler needs default.xbe: ci/default.xbe.enc, decrypted with the XBE_KEY secret.
+# Builds the APK and publishes a release for each v* tag. The recompiler needs default.xbe: ci/default.xbe.enc,
+# decrypted with the XBE_KEY secret.
 #
 # Secrets: XBE_KEY (the passphrase of ci/default.xbe.enc), KEYSTORE_BASE64 (the release .jks in base64),
 # KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD. Without the keystore the APK has a debug signature.
@@ -7,22 +7,16 @@ name: Build
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   build:
-    # pull requests from forks get no secrets, so no xbe
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-2025
     timeout-minutes: 300
     env:
@@ -78,7 +72,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then name="${GITHUB_REF_NAME#v}"; else name="1.0-${GITHUB_SHA::7}"; fi
+          name="${GITHUB_REF_NAME#v}"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "GRADLE_ARGS=-PversionCode=${{ github.run_number }} -PversionName=$name" >> "$GITHUB_ENV"
 
@@ -97,7 +91,6 @@ jobs:
           if-no-files-found: error
 
       - name: Release notes
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           apk="Black-${{ steps.version.outputs.name }}.apk"
@@ -107,7 +100,6 @@ jobs:
               -e "s|{{SIZE}}|$size|g" -e "s|{{SHA256}}|$sha|g" ci/release-notes.md > "$RUNNER_TEMP/release-notes.md"
 
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: Black for Android ${{ github.ref_name }}
