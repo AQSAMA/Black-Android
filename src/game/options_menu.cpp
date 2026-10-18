@@ -115,7 +115,7 @@ enum {
     kRight = kLeft + kSlots,
     kFields = kRight + kSlots
 };
-constexpr uint32_t kFieldSize = 64;
+constexpr uint32_t kFieldSize = 128;  // the HUD's message box reads 127 bytes of a string (0x12B800)
 Field g_fields[kFields];
 
 struct Page {

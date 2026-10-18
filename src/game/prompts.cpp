@@ -45,6 +45,19 @@ constexpr float kIconWidth = 28.0f;  // a prompt's text starts this far right of
 constexpr uint32_t kPickupGlyphs = 0x2AB72C;
 constexpr int kPickupButtons[] = {3, 0, 1, 2};
 constexpr uint32_t kKeySize = 16;
+// the HUD's message box copies a string's first 127 bytes whatever its length (0x12B800): a copy of ours has that
+// room at least, or the copy reads past the end of guest memory
+constexpr uint32_t kStringRoom = 128;
+
+// text in guest memory, zero padded to kStringRoom; 0 when out of memory
+uint32_t GuestString(const char* text, size_t size) {
+    uint32_t room = uint32_t(std::max<size_t>(size, kStringRoom));
+    uint32_t at = mem::AllocSystem(room);
+    if (!at) return 0;
+    std::memset(HostPtr(at), 0, room);
+    std::memcpy(HostPtr(at), text, size);
+    return at;
+}
 
 void Replace(std::string& text, std::string_view from, std::string_view to) {
     for (size_t at = 0; (at = text.find(from, at)) != std::string::npos; at += to.size())
@@ -132,10 +145,7 @@ X86_FUNC(sub_001F3A80) {
     if (const char* ind = game::IndonesianString(id)) {
         static std::unordered_map<uint32_t, uint32_t> copies;
         auto [copy, made] = copies.try_emplace(id, 0);
-        if (made) {
-            size_t size = std::strlen(ind) + 1;
-            if ((copy->second = mem::AllocSystem(uint32_t(size)))) std::memcpy(HostPtr(copy->second), ind, size);
-        }
+        if (made) copy->second = GuestString(ind, std::strlen(ind) + 1);
         if (copy->second) ctx.eax = copy->second;
     }
     auto [it, fresh] = g_wordings.try_emplace(uint64_t(id) << 2 | uint64_t(touch) << 1 | keyboard, 0);
@@ -144,13 +154,12 @@ X86_FUNC(sub_001F3A80) {
         // follows the bindings and the layout: worded at every ask
         int b = int(button - kButtons);
         std::string key = keyboard ? input::ButtonKey(b) : input::TouchName(b);
-        if (key.empty() || (!it->second && !(it->second = mem::AllocSystem(kHintSize)))) return;
+        if (key.empty() || (!it->second && !(it->second = GuestString("", 1)))) return;
         std::string press = game::Translated() ? app::Ui("PRESS") : "PRESS";
         std::snprintf(static_cast<char*>(HostPtr(it->second)), kHintSize, "%s %s :", press.c_str(), key.c_str());
     } else if (fresh) {
         std::string text = Wording(id, ReadCString(ctx.eax, 1024), keyboard, touch);
-        if (!text.empty() && (it->second = mem::AllocSystem(uint32_t(text.size() + 1))))
-            std::memcpy(HostPtr(it->second), text.c_str(), text.size() + 1);
+        if (!text.empty()) it->second = GuestString(text.c_str(), text.size() + 1);
     }
     if (it->second) ctx.eax = it->second;
 }
