@@ -393,7 +393,13 @@ std::u16string TakeChars() {
     return std::exchange(g_chars, {});
 }
 
-int TakeWheel() { return g_wheel.exchange(0); }
+// a notch a call: notches that came together (a swipe's) step one menu tick each
+int TakeWheel() {
+    int w = g_wheel.load();
+    while (w && !g_wheel.compare_exchange_weak(w, w > 0 ? w - 1 : w + 1)) {
+    }
+    return w > 0 ? 1 : w < 0 ? -1 : 0;
+}
 
 const Action* Actions(size_t* count) {
     static const auto list = [] {
@@ -577,12 +583,23 @@ constexpr float kStickZone = 0.42f;    // share of the width from the left a tou
 constexpr float kLookCounts = 1800.0f;  // mouse counts a swipe across the screen's width turns: 90 degrees
 constexpr uint64_t kShownMs = 8000;     // the controls hide this long after the last touch while a pad is plugged in
 
+// a touch in the menus is a tap, a swipe up or down that scrolls, or the cursor held down (a slider dragged): which,
+// once it moved or stayed long enough to tell
+enum class MenuTouch : uint8_t { Undecided, Cursor, Scroll };
+constexpr float kMenuMove = 0.03f;     // screen heights a finger moves before it is a swipe or a drag
+constexpr float kScrollNotch = 0.05f;  // screen heights of a swipe a row scrolls, about a row of the menus
+constexpr uint64_t kHoldMs = 180;      // a finger still this long is the cursor held down
+constexpr int kMaxNotches = 8;         // notches a swipe runs ahead of the menu
+
 struct Finger {
     SDL_FingerID id = 0;
     Role role = Role::None;
     size_t button = 0;     // or kStick, dragged in the editor
     float x0 = 0, y0 = 0;  // where it went down, pixels; in the editor, its offset from the control's centre
     float x = 0, y = 0;    // where it is
+    MenuTouch menu = MenuTouch::Undecided;
+    uint64_t down_ms = 0;
+    float notch_y = 0;  // a scroll's place at its last notch
 };
 
 std::mutex g_lock;
@@ -592,6 +609,7 @@ float g_stick_x = 0, g_stick_y = 0;  // -1 to 1, y up
 float g_cursor_x = 0, g_cursor_y = 0;  // the menu cursor, pixels
 bool g_cursor_down = false;
 bool g_cursor_touch = false;  // the cursor follows a finger, not the mouse
+uint64_t g_cursor_tap_until = 0;  // a tap holds the cursor down this long, so the menu sees a click
 std::atomic<uint64_t> g_touch_ms{0};
 std::atomic<uint64_t> g_back_until{0};  // the back key's tap of Start or B lasts until then
 constexpr uint64_t kBackTapMs = 120;
@@ -806,10 +824,10 @@ void FingerDown(SDL_FingerID id, float x, float y) {
         if (kButtons[b].press == kPanel) app::ToggleMenu();
         if (kButtons[b].press == kGyro) gyro::NextMode();
     } else if (InMenus()) {
+        // not the cursor yet: a tap clicks where it lifts, a swipe scrolls without moving the cursor
         f.role = Role::Cursor;
-        g_cursor_x = x;
-        g_cursor_y = y;
-        g_cursor_down = true;
+        f.menu = MenuTouch::Undecided;
+        f.down_ms = NowMs();
         g_cursor_touch = true;
     } else if (x < Width() * kStickZone) {
         f.role = Role::Stick;
@@ -818,6 +836,50 @@ void FingerDown(SDL_FingerID id, float x, float y) {
     }
     g_fingers.push_back(f);
     Recount();
+}
+
+// the finger becomes the cursor held down where it is
+void MenuHold(Finger& f) {
+    f.menu = MenuTouch::Cursor;
+    g_cursor_x = f.x;
+    g_cursor_y = f.y;
+    g_cursor_down = true;
+}
+
+// a finger in the menus moved: up or down past kMenuMove scrolls, sideways is the cursor dragging; a scroll gives a
+// wheel notch a kScrollNotch, a finger going up shows the rows below as on a phone's lists
+void MenuMove(Finger& f) {
+    float h = Height();
+    float dx = f.x - f.x0, dy = f.y - f.y0;
+    if (f.menu == MenuTouch::Undecided) {
+        if (std::fabs(dy) > kMenuMove * h && std::fabs(dy) >= std::fabs(dx)) {
+            f.menu = MenuTouch::Scroll;
+            f.notch_y = f.y0;
+        } else if (std::fabs(dx) > kMenuMove * h) {
+            MenuHold(f);
+        }
+    }
+    if (f.menu == MenuTouch::Cursor) {
+        g_cursor_x = f.x;
+        g_cursor_y = f.y;
+    }
+    if (f.menu != MenuTouch::Scroll) return;
+    float notch = kScrollNotch * h;
+    while (f.y <= f.notch_y - notch) {
+        f.notch_y -= notch;
+        if (input::g_wheel > -kMaxNotches) input::g_wheel--;
+    }
+    while (f.y >= f.notch_y + notch) {
+        f.notch_y += notch;
+        if (input::g_wheel < kMaxNotches) input::g_wheel++;
+    }
+}
+
+// a finger in the menus still since it came down: held long enough, it is the cursor held down (a slider dragged)
+void MenuHolds() {
+    uint64_t now = NowMs();
+    for (Finger& f : g_fingers)
+        if (f.role == Role::Cursor && f.menu == MenuTouch::Undecided && now - f.down_ms >= kHoldMs) MenuHold(f);
 }
 
 void FingerMove(SDL_FingerID id, float x, float y) {
@@ -837,16 +899,21 @@ void FingerMove(SDL_FingerID id, float x, float y) {
             input::g_dx += int(std::lround(dx * k));
             input::g_dy += int(std::lround(dy * k));
         }
-        if (f.role == Role::Cursor) {
-            g_cursor_x = x;
-            g_cursor_y = y;
-        }
+        if (f.role == Role::Cursor) MenuMove(f);
     }
 }
 
 void FingerUp(SDL_FingerID id) {
-    for (const Finger& f : g_fingers)
-        if (f.id == id && f.role == Role::Cursor) g_cursor_down = false;
+    for (const Finger& f : g_fingers) {
+        if (f.id != id || f.role != Role::Cursor) continue;
+        if (f.menu == MenuTouch::Undecided) {
+            // a tap: the cursor goes there and clicks
+            g_cursor_x = f.x;
+            g_cursor_y = f.y;
+            g_cursor_tap_until = NowMs() + input::kTapMs;
+        }
+        if (f.menu != MenuTouch::Scroll) g_cursor_down = false;
+    }
     std::erase_if(g_fingers, [id](const Finger& f) { return f.id == id; });
     Recount();
 }
@@ -1361,9 +1428,10 @@ bool Cursor(float& x, float& y, bool& down) {
     bool touch_down;
     {
         std::lock_guard lock(touch::g_lock);
+        touch::MenuHolds();
         px = touch::g_cursor_x;
         py = touch::g_cursor_y;
-        touch_down = touch::g_cursor_touch && touch::g_cursor_down;
+        touch_down = touch::g_cursor_touch && (touch::g_cursor_down || NowMs() < touch::g_cursor_tap_until);
     }
     // the frame is shown in the middle of the window
     float aspect = game::Aspect();
