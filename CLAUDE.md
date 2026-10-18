@@ -26,6 +26,10 @@ Everything runs on Windows. Requirements: Visual Studio 2022 C++ tools, plus And
 
 There are no tests or linters in this repo.
 
+## CI/CD
+
+`.github/workflows/build.yml` runs `build.bat` on a Windows runner for pushes to `main`, for pull requests from this repo, and for `v*` tags. A `v*` tag also publishes a GitHub Release with `Black-<version>.apk`. The xbe is committed only in encrypted form, as `ci/default.xbe.enc` (`openssl enc -aes-256-cbc -pbkdf2 -iter 200000`). The workflow decrypts it with the `XBE_KEY` secret. `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` sign the release. `app/build.gradle` reads them through the `BLACK_KEYSTORE*` environment variables and falls back to the debug key when they're absent. The version comes from the tag (`-PversionName`) and the run number (`-PversionCode`), and is passed to Gradle through `GRADLE_ARGS` in `build.bat`. If `assets/default.xbe` changes, re-encrypt `ci/default.xbe.enc` with the same key.
+
 ## Where the SDK comes from
 
 Both `CMakeLists.txt` files look for the SDK in this order: `sdk/` in the repo, then `../XboxXBE-Recomp` beside the repo. If neither exists, they FetchContent the SDK's `main` branch. A sibling checkout lets you read or change the runtime (`<sdk>/runtime/{app,core,kernel,xdk,gpu,audio}`), whose headers (`app/app.h`, `kernel/kernel.h`, `xdk/hle.h`, `core/input.h`, ...) the host code includes. Gradle's `fetchSDL` task shallow-clones SDL `release-3.4.16` into `third_party/SDL`. Its Java sources go into the APK and its C side becomes `libSDL3.so`. glslang, toml++ and imgui are fetched by CMake.
