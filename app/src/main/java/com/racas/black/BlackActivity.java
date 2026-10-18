@@ -24,6 +24,8 @@ public class BlackActivity extends SDLActivity {
     private boolean notNow;      // the player turned the access down this run
     private boolean resumed;
     private UpdateChecker.Release update;  // a newer release not shown yet
+    private final GameImporter importer = new GameImporter(this);
+    private boolean importing;  // the file picker or the copy is up: nothing else is asked meanwhile
 
     @Override
     protected String[] getLibraries() {
@@ -56,7 +58,7 @@ public class BlackActivity extends SDLActivity {
     }
 
     private void askForGame() {
-        if (dialog != null && dialog.isShowing()) return;
+        if (importing || (dialog != null && dialog.isShowing())) return;
         File own = getExternalFilesDir(null);
         if (own != null && hasGame(new File(own, "assets"))) return;
         if (!Environment.isExternalStorageManager()) {
@@ -70,7 +72,7 @@ public class BlackActivity extends SDLActivity {
 
     // the newer release, once the app is in front with no other dialog up; shown once a run
     private void tellOfUpdate() {
-        if (update == null || !resumed || isFinishing() || (dialog != null && dialog.isShowing())) return;
+        if (update == null || importing || !resumed || isFinishing() || (dialog != null && dialog.isShowing())) return;
         UpdateChecker.Release r = update;
         update = null;
         String installed = "";
@@ -120,6 +122,7 @@ public class BlackActivity extends SDLActivity {
                 .setCancelable(false)
                 .setPositiveButton("Allow access", (d, w) -> openAccessSettings())
                 .setNegativeButton("Not now", (d, w) -> notNow = true)
+                .setNeutralButton("Import game", (d, w) -> startImport())
                 .setOnDismissListener(d -> tellOfUpdate())
                 .show();
     }
@@ -130,10 +133,39 @@ public class BlackActivity extends SDLActivity {
                 .setMessage("Copy the game into the Black folder on your phone's storage:\n\n"
                         + "/storage/emulated/0/" + SHARED + "\n\n"
                         + "Its disc image (.iso), or default.xbe with its folders. The game starts as soon as they "
-                        + "are there.")
+                        + "are there.\n\n"
+                        + "Or import the disc image from your Downloads, a cloud drive or a USB stick.")
                 .setPositiveButton("OK", null)
+                .setNeutralButton("Import game", (d, w) -> startImport())
                 .setOnDismissListener(d -> tellOfUpdate())
                 .show();
+    }
+
+    // the disc image the player picks, copied where the game looks: the Black folder with all files access, else the
+    // app's own assets folder, which needs none
+    private void startImport() {
+        importing = importer.pick();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode != GameImporter.REQUEST) {
+            super.onActivityResult(requestCode, resultCode, data);
+            return;
+        }
+        Uri uri = resultCode == RESULT_OK && data != null ? data.getData() : null;
+        if (uri == null) {
+            importing = false;  // the picker was closed: onResume asks again
+            return;
+        }
+        File dir = Environment.isExternalStorageManager()
+                ? new File(Environment.getExternalStorageDirectory(), SHARED)
+                : new File(getExternalFilesDir(null), "assets");
+        importer.copy(uri, dir, ok -> {
+            importing = false;
+            if (!ok) askForGame();
+            tellOfUpdate();
+        });
     }
 
     // the app's own page of the access, or the list of every app's where a phone has no such page
