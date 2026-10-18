@@ -1,7 +1,8 @@
 // Recomp settings in the game's own options menus: RECOMP SETTINGS and MOUSE AND KEYBOARD buttons under the stock ones
-// load the page again with the F10 panel's rows in their place. A row is two copies of a stock button clip, its name
-// and its value; the name's copy stands in for the script's button object, so the script moves the focus and the
-// cursor works. The pause menu's options have room for one button, its rows start with the panel's PAGE row.
+// load the page again with the F10 panel's rows in their place. A row is four copies of a stock button clip, its name,
+// its value and an arrow each side of the value; the name's copy stands in for the script's button object, so the
+// script moves the focus and the cursor works, and a tap on an arrow steps the value as the dpad does. The pause
+// menu's options have room for one button, its rows start with the panel's PAGE row.
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -56,6 +57,8 @@ constexpr uint32_t kFindFont = 0x13CD0;   // stdcall (game object, name): a font
 constexpr uint32_t kFontName = 0x28E63C;  // "Eurostile LT Std"
 constexpr float kTextHeight = 15.0f;      // the stock buttons' text fields
 constexpr float kTextLeft = 2.0f;         // the text field in its button's label clip
+constexpr float kArrowSpace = 16.0f;      // an arrow and the gap to its value, in the rows' units
+const char* const kArrows[] = {"<", ">"};
 
 // the stock bar on frame 10: its box's x scale, the x of its right tick, right line and Scan
 struct Bar {
@@ -103,7 +106,15 @@ struct Field {
     uint32_t text;
     uint32_t data;
 };
-enum { kTitle, kEntry, kName = kEntry + kEntries, kValue = kName + kSlots, kFields = kValue + kSlots };
+enum {
+    kTitle,
+    kEntry,
+    kName = kEntry + kEntries,
+    kValue = kName + kSlots,
+    kLeft = kValue + kSlots,
+    kRight = kLeft + kSlots,
+    kFields = kRight + kSlots
+};
 constexpr uint32_t kFieldSize = 64;
 Field g_fields[kFields];
 
@@ -116,6 +127,8 @@ struct Page {
     uint32_t entry[kEntries] = {};
     uint32_t name[kSlots] = {};
     uint32_t value[kSlots] = {};
+    uint32_t arrow[2][kSlots] = {};  // left, right
+    float right_x[kSlots] = {};      // the right arrow's place, past its row's value
     size_t slots = 0;
     size_t top = 0;
     std::vector<const Row*> rows;  // null restores the defaults
@@ -186,8 +199,11 @@ void Follow(const Page& p) {
     };
     for (int i = 0; i < kEntries; i++) follow(p.entry[i], 0.0f, h.drop + h.pitch * float(i));
     for (int i = 0; i < kSlots; i++) {
-        follow(p.name[i], h.name_x, h.pitch * float(i));
-        follow(p.value[i], h.value_x, h.pitch * float(i));
+        float y = h.pitch * float(i);
+        follow(p.name[i], h.name_x, y);
+        follow(p.arrow[0][i], h.value_x, y);
+        follow(p.value[i], h.value_x + kArrowSpace, y);
+        follow(p.arrow[1][i], p.right_x[i] ? p.right_x[i] : h.value_x + 2 * kArrowSpace, y);
     }
 }
 
@@ -255,12 +271,18 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
         p.name[i] = Copy(ctx, holder, name, kDepth + int(i));
         name[3] = 'V';
         p.value[i] = Copy(ctx, holder, name, kDepth + kSlots + int(i));
-        if (!p.name[i] || !p.value[i]) return false;
-        for (uint32_t clip : {p.name[i], p.value[i]}) {
+        name[3] = 'L';
+        p.arrow[0][i] = Copy(ctx, holder, name, kDepth + 2 * kSlots + int(i));
+        name[3] = 'R';
+        p.arrow[1][i] = Copy(ctx, holder, name, kDepth + 3 * kSlots + int(i));
+        if (!p.name[i] || !p.value[i] || !p.arrow[0][i] || !p.arrow[1][i]) return false;
+        for (uint32_t clip : {p.name[i], p.value[i], p.arrow[0][i], p.arrow[1][i]}) {
             G<float>(clip + flash::kClipScaleX) = h.scale;
             G<float>(clip + flash::kClipScaleY) = h.scale;
         }
         if (!Show(ctx, kName + int(i), p.name[i]) || !Show(ctx, kValue + int(i), p.value[i])) return false;
+        for (int side = 0; side < 2; side++)
+            if (!Show(ctx, (side ? kRight : kLeft) + int(i), p.arrow[side][i], nullptr, " ")) return false;
     }
     p.first = p.name[0];
     Follow(p);
@@ -344,7 +366,14 @@ float Reach(X86Context& ctx, const Page& p, uint32_t focus) {
     shown.capture = 0;
     float widest = 0.0f;
     for (size_t i = 0; i < p.rows.size(); i++) widest = std::max(widest, Measure(font, ValueText(shown, i)));
-    return h.value_x - h.name_x + (kTextLeft + widest * kTextHeight) * scale + kTickGap;
+    // the left arrow, the value, the right arrow
+    return h.value_x - h.name_x + 2 * kArrowSpace + (kTextLeft + widest * kTextHeight) * scale + kTickGap;
+}
+
+// a row the arrows step: the PAGE row, and a value the panel does not grey out
+bool Steppable(const Row* row) {
+    if (row == &kPageRow) return true;
+    return row && row->kind == app::rows::Kind::Value && app::rows::Enabled(*row);
 }
 
 // the bar on the focused row reaches past the values, its ends and line as stock
@@ -472,19 +501,28 @@ void UpdateRow(X86Context& ctx, uint32_t ui, size_t slot, uint32_t id, bool clea
     if (edge || stepped) Sound(ctx);
 }
 
-// the title, the rows' names and values
-void UpdateTexts(const Page& p) {
+// the title, the rows' names and values, the arrows of the rows that step, the right one just past its value
+void UpdateTexts(X86Context& ctx, Page& p) {
     // a value lights up with its name: a clip's matrix, then its colours
     constexpr uint32_t kMatrixAndColours = 0x38;
+    constexpr float kArrowGap = 4.0f;
+    const Host& h = *p.host;
+    uint32_t font = CallGuest(ctx, kFindFont, {R32(kGame), kFontName});
     Write(g_fields[kTitle], app::Ui(kCaptions[p.mode - 1]));
     for (size_t i = 0; i < p.slots; i++) {
         const Row* row = p.rows[p.top + i];
+        std::string value = ValueText(p, p.top + i);
+        bool arrows = Steppable(row) && !p.capture;
         Write(g_fields[kName + i], app::Ui(row ? row->label : "RESTORE DEFAULTS"));
-        Write(g_fields[kValue + i], ValueText(p, p.top + i));
+        Write(g_fields[kValue + i], value);
+        for (int side = 0; side < 2; side++) Write(g_fields[(side ? kRight : kLeft) + i], arrows ? kArrows[side] : " ");
         uint32_t from = flash::FirstChild(p.name[i]);
-        uint32_t to = flash::FirstChild(p.value[i]);
-        if (!from || !to) continue;
-        std::memcpy(HostPtr(to + flash::kClipMatrix), HostPtr(from + flash::kClipMatrix), kMatrixAndColours);
+        if (!from) continue;
+        for (uint32_t clip : {p.value[i], p.arrow[0][i], p.arrow[1][i]})
+            if (uint32_t to = flash::FirstChild(clip))
+                std::memcpy(HostPtr(to + flash::kClipMatrix), HostPtr(from + flash::kClipMatrix), kMatrixAndColours);
+        float scale = h.scale * G<float>(from + flash::kClipScaleX);
+        p.right_x[i] = h.value_x + kArrowSpace + (kTextLeft + Measure(font, value) * kTextHeight) * scale + kArrowGap;
     }
 }
 
@@ -531,7 +569,8 @@ void Tick(X86Context& ctx, uint32_t ui) {
     } else if (slot < p.slots) {
         UpdateRow(ctx, ui, slot, id, clear);
     }
-    UpdateTexts(p);
+    UpdateTexts(ctx, p);
+    Follow(p);
     if (slot < p.slots) StretchBar(ctx, p, root, focus);
 }
 
@@ -548,6 +587,26 @@ namespace game {
 
 // mouse.cpp: a key binding takes the next click
 bool OptionsCapturing() { return g_page.capture != 0; }
+
+// mouse.cpp: by a row's button, its value clip and where its arrows are across, from to, in the space of the clip the
+// rows are in (the value clip's parent); false for a button not one of ours. A row that does not step has its arrows
+// from 0 to 0. Their text fields may be wider than their text, so this and not their boxes.
+bool OptionsRow(uint32_t button, uint32_t& value, float (&arrows)[2][2]) {
+    const Page& p = g_page;
+    if (p.mode <= 0 || p.failed) return false;
+    for (size_t i = 0; i < p.slots; i++) {
+        if (p.name[i] != button) continue;
+        value = p.value[i];
+        bool steps = Steppable(p.rows[p.top + i]) && !p.capture;
+        for (int side = 0; side < 2; side++) {
+            float x = G<float>(p.arrow[side][i] + flash::kClipX);
+            arrows[side][0] = steps ? x : 0.0f;
+            arrows[side][1] = steps ? x + kArrowSpace : 0.0f;
+        }
+        return true;
+    }
+    return false;
+}
 
 // prompts.cpp's string lookup: a text of the page by its string id, 0 for none
 uint32_t OptionsText(uint32_t id) {

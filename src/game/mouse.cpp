@@ -54,6 +54,7 @@ void HoldAim(X86Context& ctx, uint8_t*) {
 
 namespace game {
 bool OptionsCapturing();  // options_menu.cpp
+bool OptionsRow(uint32_t button, uint32_t& value, float (&arrows)[2][2]);
 }
 
 namespace {
@@ -108,6 +109,18 @@ bool Box(X86Context& ctx, uint32_t clip, float box[4]) {
     return shown;
 }
 
+// a point in a clip's own space onto the stage, as Box takes its box from the clip's parent on
+void ToStage(uint32_t clip, float& x, float& y) {
+    int depth = 0;
+    for (; clip && depth < 32; clip = R32(clip + flash::kClipParent), depth++) {
+        float m[6];
+        std::memcpy(m, HostPtr(clip + flash::kClipMatrix), sizeof(m));
+        float px = x;
+        x = m[0] * px + m[2] * y + m[4];
+        y = m[1] * px + m[3] * y + m[5];
+    }
+}
+
 bool Over(X86Context& ctx, uint32_t clip, float x, float y, float pad = 0.0f, float* across = nullptr) {
     float box[4];
     if (!IsClip(clip) || !Box(ctx, clip, box)) return false;
@@ -137,6 +150,29 @@ size_t Reach(X86Context& ctx, uint32_t start, const char* const* links, Node* li
         }
     }
     return count;
+}
+
+// on a recomp settings row (options_menu.cpp): its left or right arrow steps the value as the dpad does, the value
+// itself only takes the focus; false off the row's value and arrows or for another button
+bool RecompRow(X86Context& ctx, uint32_t button, float x, float y, bool click, uint32_t& input) {
+    uint32_t value;
+    float arrows[2][2];
+    float box[4];
+    if (!game::OptionsRow(button, value, arrows) || !IsClip(value) || !Box(ctx, value, box)) return false;
+    if (y < box[1] - kPad || y > box[3] + kPad) return false;
+    uint32_t parent = R32(value + flash::kClipParent);
+    for (int side = 0; side < 2; side++) {
+        if (!(arrows[side][1] > arrows[side][0])) continue;
+        float x0 = arrows[side][0], y0 = 0.0f, x1 = arrows[side][1], y1 = 0.0f;
+        ToStage(parent, x0, y0);
+        ToStage(parent, x1, y1);
+        if (x >= std::min(x0, x1) - kPad && x <= std::max(x0, x1) + kPad) {
+            input = click ? (side ? kInputRight : kInputLeft) : kNoInput;
+            return true;
+        }
+    }
+    input = kNoInput;
+    return x >= box[0] && x <= box[2];
 }
 
 // the value of a row of values (on, off; the map's levels) under the cursor
@@ -178,6 +214,8 @@ Aim Point(X86Context& ctx, const Node* buttons, size_t count, uint32_t map, cons
         uint32_t options = Find(buttons[i].members, "mChoiceList");
         uint32_t members = Members(ctx, options);
         clips |= IsClip(clip);
+        uint32_t step;
+        if (RecompRow(ctx, button, x, y, click, step)) return {button, 0, 0, step};
         if (uint32_t value = ValueAt(ctx, options, x, y)) return {button, options, click ? value : 0};
         if (Over(ctx, Find(members, "mLeftAnimation"), x, y, kPad)) {
             return {button, 0, 0, click ? kInputLeft : kNoInput};
