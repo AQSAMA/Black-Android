@@ -46,6 +46,14 @@ bool LookActive();  // in play, in front, no menu or panel up
 bool Firing();      // a fire button of the touch controls, or a controller's right trigger, is held
 // a controller was used: the game's hints name its buttons again, not the touch controls
 void PadUsed();
+// the layout's settings in the game's options (src/common/menu.cpp), saved at once
+const char* LayoutName();  // the preset's, or CUSTOM
+void StepLayout(int step);
+uint32_t ControlsOpacity();  // percent
+void StepOpacity(int step);
+uint32_t ControlsSize();  // percent of each control's own size
+void StepSize(int step);
+void EditLayout();  // the controls over the screen to drag where they go
 }  // namespace touch
 
 // aiming by turning the phone (gyro.cpp), main thread

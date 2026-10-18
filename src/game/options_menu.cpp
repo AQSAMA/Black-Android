@@ -373,7 +373,7 @@ float Reach(X86Context& ctx, const Page& p, uint32_t focus) {
 // a row the arrows step: the PAGE row, and a value the panel does not grey out
 bool Steppable(const Row* row) {
     if (row == &kPageRow) return true;
-    return row && row->kind == app::rows::Kind::Value && app::rows::Enabled(*row);
+    return row && row->kind == app::rows::Kind::Value && app::rows::Enabled(*row) && !app::rows::Opens(*row);
 }
 
 // the bar on the focused row reaches past the values, its ends and line as stock

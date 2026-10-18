@@ -31,7 +31,7 @@ Settings (`black.toml`, `android.toml`, `layout.toml`), saves (`hdd`), logs and 
 
 ### Input
 - **Touch**: the left side of the screen is a movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing.
-- **Layout Editor**: move, resize or hide any control and set their opacity. Presets: *Default*, *3 Finger* and *4 Finger*.
+- **Controls Layout**: in the options menu under Recomp Settings: pick a preset (*Default*, *3 Finger* or *4 Finger*), set the controls' opacity and size, and drag each control where you want it with *Edit Controls Position*.
 - **Gyroscope**: aim by turning the phone, either always or only while firing, with adjustable sensitivity.
 - **Controller**: any controller SDL3 supports, with rumble. The touch buttons hide while a controller is in use.
 - **Keyboard and Mouse**, with rebindable controls.

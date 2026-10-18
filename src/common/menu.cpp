@@ -32,6 +32,17 @@ float Sensitivity();
 void SetSensitivity(float s);
 }  // namespace gyro
 
+// native/touch.cpp: the touch controls' layout
+namespace touch {
+const char* LayoutName();
+void StepLayout(int step);
+uint32_t ControlsOpacity();
+void StepOpacity(int step);
+uint32_t ControlsSize();
+void StepSize(int step);
+void EditLayout();
+}  // namespace touch
+
 namespace app {
 
 namespace {
@@ -205,7 +216,7 @@ void Changed() {
 
 enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlur, kSkipIntros, kSensitivity,
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
-             kFmvScale, kGyro, kGyroSensitivity };
+             kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit };
 
 using rows::Kind;
 using rows::Row;
@@ -228,6 +239,10 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kLanguage, "LANGUAGE"},
     {Kind::Value, kAudioOutput, "AUDIO OUTPUT"},
     {Kind::Heading, -1, "TOUCH"},
+    {Kind::Value, kTouchLayout, "CONTROLS LAYOUT"},
+    {Kind::Value, kTouchOpacity, "CONTROLS OPACITY"},
+    {Kind::Value, kTouchSize, "CONTROLS SIZE"},
+    {Kind::Value, kTouchEdit, "EDIT CONTROLS POSITION"},
     {Kind::Value, kGyro, "GYROSCOPE"},
     {Kind::Value, kGyroSensitivity, "GYRO SENSITIVITY"},
 };
@@ -347,6 +362,24 @@ void StepInputRow(int id, int step, char (&text)[64]) {
             std::snprintf(text, sizeof(text), "%s", gyro::CurrentMode() == 0 ? "OFF"
                                                     : gyro::CurrentMode() == 1 ? "ALWAYS"
                                                                                : "WHILE FIRING");
+            break;
+        case kTouchLayout:
+            // the presets, CUSTOM once a control was moved
+            if (step) touch::StepLayout(step);
+            std::snprintf(text, sizeof(text), "%s", touch::LayoutName());
+            break;
+        case kTouchOpacity:
+            if (step) touch::StepOpacity(step);
+            std::snprintf(text, sizeof(text), "%u%%", touch::ControlsOpacity());
+            break;
+        case kTouchSize:
+            if (step) touch::StepSize(step);
+            std::snprintf(text, sizeof(text), "%u%%", touch::ControlsSize());
+            break;
+        case kTouchEdit:
+            // any step opens the editor over the screen
+            if (step) touch::EditLayout();
+            std::snprintf(text, sizeof(text), "OPEN");
             break;
         case kGyroSensitivity:
             // 0.1 to 5.0 in steps of 0.1
@@ -663,6 +696,8 @@ std::string rows::Value(const Row& row, int step) {
 void rows::Defaults(int page) { RestoreDefaults(page); }
 
 bool rows::Enabled(const Row&) { return true; }
+
+bool rows::Opens(const Row& row) { return row.kind == Kind::Value && row.id == kTouchEdit; }
 
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 

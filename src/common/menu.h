@@ -27,6 +27,8 @@ std::string Value(const Row& row, int step = 0);  // what the row shows, stepped
 void Defaults(int page);
 // false for a row shown greyed that takes no change: HDR output without an HDR display
 bool Enabled(const Row& row);
+// a row whose step opens something rather than changing a value: no arrows beside it in the game's options
+bool Opens(const Row& row);
 
 }  // namespace rows
 

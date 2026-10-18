@@ -499,7 +499,7 @@ enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag };
 
 // a control of the touch layout: what it shows and presses, on the controller (analog 0-7, button bits from 8) or on
 // the host. Where it sits is the layout's, which the player edits and picks presets for
-enum : int { kLayout = -3, kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
+enum : int { kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
 constexpr int kBit = 8;  // kBit + n: buttons bit n (dpad up down left right, start, back, left thumb, right thumb)
 enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor };
 enum class When : uint8_t { Play, Menus, Both };
@@ -510,8 +510,10 @@ struct Button {
     int press;
     When when;
     bool look = false;  // a drag from it turns the view as well, as a fire button does
-    bool keep = false;  // never hidden: the way back into the settings and the editor
+    bool keep = false;  // never hidden: the way back out of the menus
 };
+// the layout is set in the game's options (Recomp Settings, TOUCH): its preset, opacity, size, and the editor that
+// moves the controls, see the functions at the end
 constexpr Button kButtons[] = {
     {"fire", "Fire", Icon::Bullet, kAnalogRT, When::Play, true},
     {"fire_left", "Fire (left)", Icon::Bullet, kAnalogRT, When::Play, true},
@@ -527,7 +529,6 @@ constexpr Button kButtons[] = {
     {"map", "Objectives", Icon::Map, kBit + 5, When::Play},
     {"pause", "Pause", Icon::Pause, kBit + 4, When::Both},
     {"gyro", "Gyroscope", Icon::Gyro, kGyro, When::Play},
-    {"layout", "Edit layout", Icon::Move, kLayout, When::Play, false, true},
     {"back", "Back", Icon::Back, kAnalogB, When::Menus, false, true},
     {"suppressor", "Suppressor", Icon::Suppressor, kAnalogY, When::Play},
 };
@@ -545,7 +546,7 @@ constexpr Layout kTwoFinger = {{
     {0.924f, 0.66f, 0.095f}, {0.059f, 0.40f, 0.065f}, {0.969f, 0.40f, 0.065f}, {0.91f, 0.40f, 0.045f},
     {0.843f, 0.56f, 0.05f}, {0.789f, 0.40f, 0.055f}, {0.784f, 0.70f, 0.05f}, {0.838f, 0.84f, 0.055f},
     {0.964f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
-    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f}, {0.365f, 0.07f, 0.04f},
+    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f}, {0.108f, 0.70f, 0.12f},
 }};
 // claw with the left index finger: fire at the top left, the right thumb turns and aims
@@ -553,7 +554,7 @@ constexpr Layout kThreeFinger = {{
     {0.90f, 0.68f, 0.08f}, {0.07f, 0.32f, 0.085f}, {0.955f, 0.42f, 0.06f}, {0.875f, 0.42f, 0.042f},
     {0.80f, 0.60f, 0.045f}, {0.765f, 0.40f, 0.05f}, {0.745f, 0.76f, 0.045f}, {0.84f, 0.87f, 0.05f},
     {0.955f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
-    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f}, {0.365f, 0.07f, 0.04f},
+    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f}, {0.13f, 0.72f, 0.12f},
 }};
 // both index fingers on top: fire at the top left, aim and crouch at the top right
@@ -561,7 +562,7 @@ constexpr Layout kFourFinger = {{
     {0.90f, 0.70f, 0.075f}, {0.07f, 0.32f, 0.085f}, {0.93f, 0.30f, 0.07f}, {0.97f, 0.55f, 0.04f},
     {0.78f, 0.55f, 0.045f}, {0.73f, 0.38f, 0.05f}, {0.72f, 0.75f, 0.045f}, {0.80f, 0.87f, 0.05f},
     {0.83f, 0.24f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
-    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f}, {0.365f, 0.07f, 0.04f},
+    {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f}, {0.13f, 0.72f, 0.12f},
 }};
 struct Preset {
@@ -570,7 +571,7 @@ struct Preset {
     const Layout* places;
 };
 constexpr Preset kPresets[] = {
-    {"default", "Default", &kTwoFinger}, {"three", "3 Finger", &kThreeFinger}, {"four", "4 Finger", &kFourFinger}};
+    {"default", "DEFAULT", &kTwoFinger}, {"three", "3 FINGER", &kThreeFinger}, {"four", "4 FINGER", &kFourFinger}};
 
 constexpr float kStickZone = 0.42f;    // share of the width from the left a touch takes the stick in
 constexpr float kLookCounts = 1800.0f;  // mouse counts a swipe across the screen's width turns: 90 degrees
@@ -599,14 +600,14 @@ constexpr uint64_t kBackTapMs = 120;
 Layout g_layout = kTwoFinger;
 size_t g_preset = 0;
 float g_opacity = 0.85f;
+float g_scale = 1.0f;  // every control's size, on top of its own
 bool g_loaded = false;
-// the editor: the layout before it opened (for Cancel), the control picked, the toolbar's rect on screen
+// the editor: the layout before it opened (for Cancel), the control picked
 std::atomic<bool> g_editing{false};
 Layout g_before = kTwoFinger;
 float g_before_opacity = 0.85f;
 size_t g_before_preset = 0;
 int g_selected = -1;
-float g_toolbar[4] = {};
 
 float Width() {
     int w, h;
@@ -630,6 +631,7 @@ void LoadLayout() {
             if (preset == kPresets[i].id) g_preset = i;
         g_layout = *kPresets[g_preset].places;
         g_opacity = std::clamp(float(t["opacity"].value_or(double(g_opacity))), 0.2f, 1.0f);
+        g_scale = std::clamp(float(t["scale"].value_or(double(g_scale))), 0.5f, 1.5f);
         for (size_t i = 0; i <= kButtonCount; i++) {
             const char* id = i == kStick ? "stick" : kButtons[i].id;
             const toml::table* p = t["controls"][id].as_table();
@@ -651,7 +653,8 @@ void SaveLayout() {
         controls.insert(i == kStick ? "stick" : kButtons[i].id,
                         toml::table{{"x", double(p.x)}, {"y", double(p.y)}, {"r", double(p.r)}, {"hidden", p.hidden}});
     }
-    toml::table t{{"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"controls", controls}};
+    toml::table t{{"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"scale", double(g_scale)},
+                  {"controls", controls}};
     std::ofstream(LayoutFile()) << t << "\n";
 }
 
@@ -681,7 +684,45 @@ void Centre(size_t i, float& cx, float& cy) {
     cy = g_layout[i].y * Height();
 }
 
-float Radius(size_t i) { return g_layout[i].r * Height(); }
+float Radius(size_t i) { return g_layout[i].r * g_scale * Height(); }
+
+// the editor's bar at the top: Reset, Cancel, Done, in screen shares
+constexpr const char* kBarLabels[] = {"RESET", "CANCEL", "DONE"};
+constexpr float kBarY = 0.17f, kBarH = 0.09f, kBarW = 0.13f, kBarGap = 0.02f;
+
+// the bar's button under a point, -1 for none
+int BarAt(float x, float y, float rect[4] = nullptr, int which = -1) {
+    float w = Width(), h = Height();
+    float total = 3 * kBarW + 2 * kBarGap;
+    for (int i = 0; i < 3; i++) {
+        float x0 = (0.5f - total / 2 + float(i) * (kBarW + kBarGap)) * w, y0 = kBarY * h;
+        float x1 = x0 + kBarW * w, y1 = y0 + kBarH * h;
+        if (i == which && rect) {
+            rect[0] = x0, rect[1] = y0, rect[2] = x1, rect[3] = y1;
+            return i;
+        }
+        if (which < 0 && x >= x0 && x <= x1 && y >= y0 && y <= y1) return i;
+    }
+    return -1;
+}
+
+void ApplyPreset(size_t i) {
+    g_preset = i;
+    g_layout = *kPresets[i].places;
+    g_selected = -1;
+}
+
+void CloseEditor(bool keep) {
+    if (keep) {
+        SaveLayout();
+    } else {
+        g_layout = g_before;
+        g_opacity = g_before_opacity;
+        g_preset = g_before_preset;
+    }
+    g_selected = -1;
+    g_editing = false;
+}
 
 // the button under a point, kButtonCount for none
 size_t HitButton(float x, float y) {
@@ -717,8 +758,22 @@ void Recount() {
     if (!stick) g_stick_x = g_stick_y = 0;
 }
 
-// the editor: a touch on a control picks it up to move it, anywhere else lets go of the pick
+// the editor: a touch on the bar resets, cancels or saves; on a control picks it up to move it, anywhere else lets go
+// of the pick
 void EditDown(Finger& f, float x, float y) {
+    switch (BarAt(x, y)) {
+        case 0:
+            ApplyPreset(g_preset);
+            return;
+        case 1:
+            CloseEditor(false);
+            return;
+        case 2:
+            CloseEditor(true);
+            return;
+        default:
+            break;
+    }
     size_t b = HitButton(x, y);
     float sx = g_layout[kStick].x * Width(), sy = g_layout[kStick].y * Height(), sr = Radius(kStick);
     if (b == kButtonCount && (x - sx) * (x - sx) + (y - sy) * (y - sy) <= sr * sr) b = kStick;
@@ -750,7 +805,6 @@ void FingerDown(SDL_FingerID id, float x, float y) {
         f.button = b;
         if (kButtons[b].press == kPanel) app::ToggleMenu();
         if (kButtons[b].press == kGyro) gyro::NextMode();
-        if (kButtons[b].press == kLayout) OpenEditor();
     } else if (InMenus()) {
         f.role = Role::Cursor;
         g_cursor_x = x;
@@ -810,10 +864,7 @@ void KeyEvent(const SDL_KeyboardEvent& k) {
         if (!k.down || k.repeat) return;
         std::lock_guard lock(g_lock);
         if (g_editing) {
-            g_layout = g_before;
-            g_opacity = g_before_opacity;
-            g_preset = g_before_preset;
-            g_editing = false;
+            CloseEditor(false);
         } else if (app::MenuOpen()) {
             app::ToggleMenu();
         } else {
@@ -884,9 +935,6 @@ bool OnEvent(const SDL_Event& e) {
             std::lock_guard lock(g_lock);
             EnsureLayout();
             if (e.type == SDL_EVENT_FINGER_DOWN) {
-                // the editor's toolbar is ImGui's
-                bool on_bar = x >= g_toolbar[0] && y >= g_toolbar[1] && x <= g_toolbar[2] && y <= g_toolbar[3];
-                if (g_editing && on_bar) return false;
                 // the settings panel takes the touches, but for the button that closes it
                 if (app::MenuOpen() && !g_editing) {
                     size_t b = HitButton(x, y);
@@ -1120,65 +1168,27 @@ void DrawStick(ImDrawList* dl, float th) {
     dl->AddCircle(knob, r * 0.42f, Fade(255, 255, 255, held ? 180 : 110), 48, th * 0.7f);
 }
 
-void ApplyPreset(size_t i) {
-    g_preset = i;
-    g_layout = *kPresets[i].places;
-    g_selected = -1;
+// a text centred on a point, its height a share of the screen's
+void CentredText(ImDrawList* dl, ImVec2 at, float size, ImU32 colour, const char* text) {
+    ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0, text);
+    dl->AddText(ImGui::GetFont(), size, ImVec2(at.x - ts.x / 2, at.y - ts.y / 2), colour, text);
 }
 
-// the editor's toolbar: presets, the opacity, the picked control's size and whether it shows, then done or not
-void DrawToolbar() {
-    float w = Width(), h = Height();
-    ImGui::SetNextWindowPos(ImVec2(w / 2, h * 0.16f), ImGuiCond_Always, ImVec2(0.5f, 0));
-    ImGui::SetNextWindowBgAlpha(0.88f);
-    constexpr ImGuiWindowFlags kFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                                        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
-                                        ImGuiWindowFlags_NoMove;
-    ImGui::Begin("Edit layout", nullptr, kFlags);
-    ImGui::TextUnformatted("Drag a control to move it, tap one to pick it.");
-    ImGui::TextUnformatted("Preset:");
-    for (size_t i = 0; i < std::size(kPresets); i++) {
-        ImGui::SameLine();
-        bool current = i == g_preset;
-        if (current) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::Button(kPresets[i].label)) ApplyPreset(i);
-        if (current) ImGui::PopStyleColor();
+// the editor's bar, drawn as the controls are: Reset, Cancel, Done, and what to do under it
+void DrawEditorBar(ImDrawList* dl, float th) {
+    float h = Height();
+    for (int i = 0; i < 3; i++) {
+        float r[4];
+        BarAt(0, 0, r, i);
+        bool done = i == 2;
+        dl->AddRectFilled(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]),
+                          done ? IM_COL32(150, 115, 45, 235) : IM_COL32(20, 18, 14, 225), h * 0.015f);
+        dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, 230), h * 0.015f, 0, th * 0.7f);
+        CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * 0.042f, IM_COL32(255, 255, 255, 240),
+                    kBarLabels[i]);
     }
-    float percent = g_opacity * 100;
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14);
-    if (ImGui::SliderFloat("Opacity", &percent, 20, 100, "%.0f%%")) g_opacity = percent / 100;
-    ImGui::Separator();
-    if (g_selected >= 0) {
-        size_t i = size_t(g_selected);
-        Place& p = g_layout[i];
-        ImGui::Text("%s", i == kStick ? "Movement stick" : kButtons[i].label);
-        float size = p.r * 1000;
-        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14);
-        if (ImGui::SliderFloat("Size", &size, 25, 200, "%.0f")) p.r = size / 1000;
-        if (i != kStick && !kButtons[i].keep) ImGui::Checkbox("Hidden", &p.hidden);
-    } else {
-        ImGui::TextDisabled("No control picked");
-    }
-    ImGui::Separator();
-    if (ImGui::Button("Reset")) ApplyPreset(g_preset);
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel")) {
-        g_layout = g_before;
-        g_opacity = g_before_opacity;
-        g_preset = g_before_preset;
-        g_editing = false;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Save")) {
-        SaveLayout();
-        g_editing = false;
-    }
-    ImVec2 at = ImGui::GetWindowPos(), sz = ImGui::GetWindowSize();
-    g_toolbar[0] = at.x;
-    g_toolbar[1] = at.y;
-    g_toolbar[2] = at.x + sz.x;
-    g_toolbar[3] = at.y + sz.y;
-    ImGui::End();
+    CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.05f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
+                "DRAG A CONTROL TO MOVE IT");
 }
 
 }  // namespace
@@ -1187,7 +1197,6 @@ void Draw() {
     std::lock_guard lock(g_lock);
     EnsureLayout();
     bool editing = g_editing;
-    if (!editing) g_toolbar[0] = g_toolbar[1] = g_toolbar[2] = g_toolbar[3] = -1;
     if (!editing && !Shown()) return;
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     float h = Height();
@@ -1224,8 +1233,84 @@ void Draw() {
             ImVec2 at(g_layout[kStick].x * Width(), g_layout[kStick].y * h);
             dl->AddCircle(at, Radius(kStick) + th * 2, IM_COL32(255, 200, 60, 255), 64, th * 1.5f);
         }
-        DrawToolbar();
+        DrawEditorBar(dl, th);
     }
+}
+
+// ---- the layout's settings, for the game's options (Recomp Settings, TOUCH); game thread, each saved at once
+
+namespace {
+
+// the controls moved, resized or hidden away from the preset's places
+bool Custom() {
+    const Layout& preset = *kPresets[g_preset].places;
+    for (size_t i = 0; i <= kButtonCount; i++) {
+        const Place& a = g_layout[i];
+        const Place& b = preset[i];
+        if (std::fabs(a.x - b.x) > 1e-4f || std::fabs(a.y - b.y) > 1e-4f || std::fabs(a.r - b.r) > 1e-4f ||
+            a.hidden != b.hidden)
+            return true;
+    }
+    return false;
+}
+
+uint32_t Percent(float f) { return uint32_t(std::lround(f * 100.0f)); }
+
+}  // namespace
+
+const char* LayoutName() {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    return Custom() ? "CUSTOM" : kPresets[g_preset].label;
+}
+
+// the next or previous preset; from a custom layout first back to its own preset's places, or the one before
+void StepLayout(int step) {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    size_t n = std::size(kPresets);
+    size_t i = Custom() ? (step > 0 ? g_preset : (g_preset + n - 1) % n) : (g_preset + n + (step > 0 ? 1 : n - 1)) % n;
+    ApplyPreset(i);
+    SaveLayout();
+}
+
+uint32_t ControlsOpacity() {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    return Percent(g_opacity);
+}
+
+// 20% to 100% in steps of 5
+void StepOpacity(int step) {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    g_opacity = float(std::clamp(int(Percent(g_opacity)) + step * 5, 20, 100)) / 100.0f;
+    SaveLayout();
+}
+
+uint32_t ControlsSize() {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    return Percent(g_scale);
+}
+
+// 50% to 150% in steps of 5
+void StepSize(int step) {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    g_scale = float(std::clamp(int(Percent(g_scale)) + step * 5, 50, 150)) / 100.0f;
+    SaveLayout();
+}
+
+// the controls over the screen to drag where they go, Done or Cancel in the bar at the top, Android's back cancels
+void EditLayout() {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    // the touch that picked the row is the menu's, not the editor's
+    g_fingers.clear();
+    g_cursor_down = false;
+    Recount();
+    OpenEditor();
 }
 
 void AddLook(float dx, float dy) {
