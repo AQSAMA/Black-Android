@@ -22,6 +22,7 @@ using namespace kernel;
 namespace game {
 uint32_t OptionsText(uint32_t id);  // options_menu.cpp
 bool Translated();  // language.cpp
+const char* IndonesianString(uint32_t id);  // language.cpp
 }
 
 namespace {
@@ -127,6 +128,16 @@ X86_FUNC(sub_001F3A80) {
     bool keyboard = input::KeyboardActive();
     bool touch = !keyboard && input::TouchActive();
     std::lock_guard lock(g_lock);
+    // Indonesian: the US string swapped for its translation in guest memory, copied once, before the wording below
+    if (const char* ind = game::IndonesianString(id)) {
+        static std::unordered_map<uint32_t, uint32_t> copies;
+        auto [copy, made] = copies.try_emplace(id, 0);
+        if (made) {
+            size_t size = std::strlen(ind) + 1;
+            if ((copy->second = mem::AllocSystem(uint32_t(size)))) std::memcpy(HostPtr(copy->second), ind, size);
+        }
+        if (copy->second) ctx.eax = copy->second;
+    }
     auto [it, fresh] = g_wordings.try_emplace(uint64_t(id) << 2 | uint64_t(touch) << 1 | keyboard, 0);
     const uint32_t* button = std::find(std::begin(kButtons), std::end(kButtons), id);
     if ((keyboard || touch) && button != std::end(kButtons)) {

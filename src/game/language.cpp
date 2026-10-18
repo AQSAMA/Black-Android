@@ -1,6 +1,10 @@
 // The game's language. This build sets English (US) at boot whatever the console's language is; the LANGUAGE setting
 // takes its place when the game files have that language's strings, else the game stays in English. A Europe disc
 // has UK English strings in place of the US ones, which its own build picks for English.
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -61,7 +65,7 @@ void GameLanguage(X86Context&, uint8_t*) {
 
 namespace game {
 
-// the disc has a language besides English: the US release has none, so no LANGUAGE row and no translations
+// the disc has a language besides English: the US release has none, so only English and Indonesian
 bool HasLanguages() {
     static const bool any = [] {
         for (const Language& l : ::kLanguages)
@@ -71,10 +75,43 @@ bool HasLanguages() {
     return any;
 }
 
-// prompts.cpp: the game shows the LANGUAGE setting's language, not English in its place
+// English and Indonesian always (Indonesian translates the recomp's text, the game's stays English), the others when
+// the disc has their strings
+bool LanguageAvailable(const std::string& code) {
+    static const auto on_disc = [] {
+        std::array<bool, std::size(::kLanguages)> out{};
+        for (size_t i = 0; i < out.size(); i++) out[i] = OnDisc(::kLanguages[i]);
+        return out;
+    }();
+    if (code == kUs.code || code == "ind") return true;
+    for (size_t i = 0; i < on_disc.size(); i++)
+        if (code == ::kLanguages[i].code) return on_disc[i];
+    return false;
+}
+
+// prompts.cpp: the game shows the LANGUAGE setting's language, not English in its place; Indonesian boots the US
+// strings and has them swapped by id, so it counts too
 bool Translated() {
+    if (game::BootLanguage() == "ind") return true;
     uint32_t index = Index();
     return index != kUs.index && index != kUk.index;
+}
+
+// prompts.cpp: the Indonesian text of a game string by its id, null when it has none or the language is another
+const char* IndonesianString(uint32_t id) {
+    struct String {
+        uint32_t id;
+        const char* text;
+    };
+    // sorted by id, made from MainUS.bin's strings
+    static constexpr String kStrings[] = {
+#include "game/strings_ind.inc"
+    };
+    static const bool on = game::BootLanguage() == "ind";
+    if (!on) return nullptr;
+    const String* at = std::lower_bound(std::begin(kStrings), std::end(kStrings), id,
+                                        [](const String& s, uint32_t v) { return s.id < v; });
+    return at != std::end(kStrings) && at->id == id ? at->text : nullptr;
 }
 
 }  // namespace game
