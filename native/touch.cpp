@@ -31,6 +31,7 @@
 #include "common/keys.h"
 #include "common/menu.h"
 #include "common/options.h"
+#include "common/translations.h"
 #include "host.h"
 
 namespace input {
@@ -1252,10 +1253,10 @@ void DrawEditorBar(ImDrawList* dl, float th) {
                           done ? IM_COL32(150, 115, 45, 235) : IM_COL32(20, 18, 14, 225), h * 0.015f);
         dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, 230), h * 0.015f, 0, th * 0.7f);
         CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * 0.042f, IM_COL32(255, 255, 255, 240),
-                    kBarLabels[i]);
+                    app::Ui(kBarLabels[i]).c_str());
     }
     CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.05f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
-                "DRAG A CONTROL TO MOVE IT");
+                app::Ui("DRAG A CONTROL TO MOVE IT").c_str());
 }
 
 }  // namespace

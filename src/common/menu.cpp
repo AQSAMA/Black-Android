@@ -80,7 +80,8 @@ const char* const kFmvScaleNames[] = {"FILL", "4:3"};
 constexpr uint32_t kAudioOutputs[] = {audio::kOutputAuto, audio::kOutputMono, audio::kOutputStereo,
                                       audio::kOutputSurround};
 const char* const kAudioOutputNames[] = {"AUTOMATIC", "MONO", "2.0 STEREO", "5.1 SURROUND"};
-const char* const kLanguageNames[] = {"ENGLISH", "FRENCH", "GERMAN", "ITALIAN", "SPANISH"};  // as game::kLanguages
+const char* const kLanguageNames[] = {"ENGLISH", "FRENCH", "GERMAN", "ITALIAN", "SPANISH",
+                                      "INDONESIAN"};  // as game::kLanguages
 constexpr uint32_t kFpsCaps[] = {30, 60, 75, 90, 120, 144, 165, 240, 360, kFpsCapRefresh, 0};
 
 int StepIndex(int index, int step, int count) {
@@ -390,8 +391,10 @@ void StepInputRow(int id, int step, char (&text)[64]) {
             int count = int(std::size(game::kLanguages));
             int i = 0;
             while (i < count - 1 && o.language != game::kLanguages[i]) i++;
+            // past the languages this disc has no strings for; English and Indonesian are always there
             if (step) {
-                i = StepIndex(i, step, count);
+                do i = StepIndex(i, step, count);
+                while (!game::LanguageAvailable(game::kLanguages[i]));
                 o.language = game::kLanguages[i];
             }
             const char* format = o.language == game::BootLanguage() ? "%s" : "%s (RESTART)";
@@ -680,11 +683,8 @@ const rows::Row* rows::Page(int page, size_t* count) {
         *count = InputRows().size();
         return InputRows().data();
     }
-    static const std::vector<Row> rows = [] {
-        std::vector<Row> out(std::begin(kSettingsRows), std::end(kSettingsRows));
-        if (!game::HasLanguages()) std::erase_if(out, [](const Row& row) { return row.id == kLanguage; });
-        return out;
-    }();
+    // LANGUAGE always shows: Indonesian is there whatever the disc
+    static const std::vector<Row> rows(std::begin(kSettingsRows), std::end(kSettingsRows));
     *count = rows.size();
     return rows.data();
 }

@@ -7,8 +7,9 @@
 // the game's own settings, in the settings file through app::kGame.options
 namespace game {
 
-// the languages, saved by these codes: English, French, German, Italian, Spanish
-inline constexpr const char* kLanguages[] = {"int", "fra", "deu", "ita", "esp"};
+// the languages, saved by these codes: English, French, German, Italian, Spanish, Indonesian. Indonesian is the
+// recomp's own text only: the game files have none, so the game itself stays in English
+inline constexpr const char* kLanguages[] = {"int", "fra", "deu", "ita", "esp", "ind"};
 
 struct Options {
     bool skip_intros = false;  // logos at boot and the film after pressing start
@@ -30,6 +31,7 @@ Options& Opt();
 // the language setting as this run started, the language the game boots in
 const std::string& BootLanguage();
 bool HasLanguages();  // language.cpp
+bool LanguageAvailable(const std::string& code);  // language.cpp: the LANGUAGE row offers it
 inline std::atomic<float> g_fps{0};  // from the host, for the game's own counter
 inline std::atomic<bool> g_hide_hud{false};  // the toggle HUD key: the gameplay HUD is not drawn
 inline std::atomic<bool> g_focus_paused{false};  // the game thread waits while the app is in the background
