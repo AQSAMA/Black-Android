@@ -36,7 +36,7 @@ using flash::Text;
 namespace {
 
 constexpr uint32_t kHashTable = 0x2AC908;
-const char* const kCaptions[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD"};
+const char* const kCaptions[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CHEATS"};
 constexpr int kEntries = int(std::size(kCaptions));
 constexpr int kSlots = 8;
 constexpr int kDepth = 100;
@@ -89,7 +89,7 @@ struct Host {
 };
 constexpr Host kHosts[] = {
     {"OptionsMenuXbox", "TextAnim", "_level4.Main.TextAnim.ControllerSetup_Text", "Playerprofile_Text", 25.0f,
-     "controllerButton", "Playerprofile", 2, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
+     "controllerButton", "Playerprofile", 3, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
      {"ControllerSetup_Text", "SoundSetup_Text", "PictureSetup_Text", "Playerprofile_Text"},
      {1.0f, 245.0f, 445.0f, -5.0f}},
     {"PauseMenuOptionXbox", nullptr, "_level4.Main.ToggleCrouch", "ToggleCrouch", 222.0f,
@@ -474,7 +474,8 @@ void ApplyRowInput(size_t slot, uint32_t id, bool locked) {
     bool value = row && row->kind == app::rows::Kind::Value;
     bool changes = id >= kInputLeft && id <= kInputConfirm;
     if (row == &kPageRow && changes) {
-        p.mode = 3 - p.mode;
+        // round the pages, left the other way
+        p.mode = id == kInputLeft ? (p.mode + kEntries - 2) % kEntries + 1 : p.mode % kEntries + 1;
         Fill(p);
     } else if (value && changes) {
         if (!locked) app::rows::Value(*row, id == kInputLeft ? -1 : 1);

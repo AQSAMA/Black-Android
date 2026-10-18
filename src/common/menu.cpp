@@ -217,7 +217,9 @@ void Changed() {
 
 enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlur, kSkipIntros, kSensitivity,
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
-             kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit };
+             kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
+             kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
+             kUnlockLevels };
 
 using rows::Kind;
 using rows::Row;
@@ -248,6 +250,19 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kGyroSensitivity, "GYRO SENSITIVITY"},
 };
 
+// a page of its own, apart from the recomp's settings
+constexpr Row kCheatRows[] = {
+    {Kind::Heading, -1, "CHEATS"},
+    {Kind::Value, kInfiniteAmmo, "INFINITE AMMO"},
+    {Kind::Value, kInfiniteGrenades, "INFINITE GRENADES"},
+    {Kind::Value, kRapidFire, "RAPID FIRE"},
+    {Kind::Value, kNoRecoil, "NO RECOIL"},
+    {Kind::Value, kGodMode, "GOD MODE"},
+    {Kind::Value, kOneHitKill, "ONE-HIT KILL"},
+    {Kind::Value, kGameSpeed, "GAME SPEED"},
+    {Kind::Value, kUnlockLevels, "UNLOCK ALL LEVELS"},
+};
+
 const std::vector<Row>& InputRows() {
     static const std::vector<Row> list = [] {
         std::vector<Row> out = {{Kind::Heading, -1, "MOUSE"},
@@ -274,6 +289,12 @@ bool* ToggleFlag(Settings& s, int id) {
         case kSkipIntros: return &o.skip_intros;
         case kInvertMouse: return &o.invert_mouse;
         case kHoldAim: return &o.hold_aim;
+        case kInfiniteAmmo: return &o.infinite_ammo;
+        case kNoRecoil: return &o.no_recoil;
+        case kGodMode: return &o.god_mode;
+        case kOneHitKill: return &o.one_hit_kill;
+        case kInfiniteGrenades: return &o.infinite_grenades;
+        case kUnlockLevels: return &o.unlock_levels;
         default: return nullptr;
     }
 }
@@ -331,6 +352,26 @@ bool StepGraphicsRow(int id, int step, Settings& s, char (&text)[64]) {
             return true;
         case kDrawDistance:
             std::snprintf(text, sizeof(text), "%s", kDistanceNames[StepTable(kDistances, o.draw_distance, step)]);
+            return true;
+        default:
+            return false;
+    }
+}
+
+// the cheat rows that are no ON / OFF, stepped first; false for another row
+bool StepCheatRow(int id, int step, char (&text)[64]) {
+    game::Options& o = game::Opt();
+    switch (id) {
+        case kRapidFire:
+            // off, then 2 to 4 times the rate
+            if (step) o.rapid_fire = uint32_t(StepRange(int(o.rapid_fire), 1, 4, 1, step));
+            if (o.rapid_fire <= 1) std::snprintf(text, sizeof(text), "OFF");
+            else std::snprintf(text, sizeof(text), "%uX", o.rapid_fire);
+            return true;
+        case kGameSpeed:
+            // 25% to 200% in steps of 25
+            if (step) o.game_speed = uint32_t(StepRange(int(o.game_speed), 25, 200, 25, step));
+            std::snprintf(text, sizeof(text), o.game_speed == 100 ? "%u%% (DEFAULT)" : "%u%%", o.game_speed);
             return true;
         default:
             return false;
@@ -410,7 +451,8 @@ std::string RowText(int id, int step, Settings& s = Get()) {
     if (bool* on = ToggleFlag(s, id)) {
         Flip(*on, step);
         std::snprintf(text, sizeof(text), "%s", OnOff(*on));
-    } else if (!StepDisplayRow(id, step, s, text) && !StepGraphicsRow(id, step, s, text)) {
+    } else if (!StepDisplayRow(id, step, s, text) && !StepGraphicsRow(id, step, s, text) &&
+               !StepCheatRow(id, step, text)) {
         StepInputRow(id, step, text);
     }
     if (step && &s == &Get()) Changed();
@@ -425,12 +467,26 @@ std::string KeyText(std::string keys) {
     return keys;
 }
 
-const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD"};
+const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CHEATS"};
 constexpr int kSettingsPage = 0;
 constexpr int kKeyboardPage = 1;
+constexpr int kCheatsPage = 2;
 
 void RestoreDefaults(int page) {
     game::Options& o = game::Opt();
+    if (page == kCheatsPage) {
+        game::Options none;
+        o.infinite_ammo = none.infinite_ammo;
+        o.rapid_fire = none.rapid_fire;
+        o.no_recoil = none.no_recoil;
+        o.game_speed = none.game_speed;
+        o.god_mode = none.god_mode;
+        o.one_hit_kill = none.one_hit_kill;
+        o.infinite_grenades = none.infinite_grenades;
+        o.unlock_levels = none.unlock_levels;
+        Changed();
+        return;
+    }
     if (page == kKeyboardPage) {
         o.mouse_sensitivity = game::Options{}.mouse_sensitivity;
         o.invert_mouse = false;
@@ -447,6 +503,15 @@ void RestoreDefaults(int page) {
     o.hold_aim = keep.hold_aim;
     o.walk_speed = keep.walk_speed;
     o.keys = keep.keys;
+    // the cheats page has its own defaults
+    o.infinite_ammo = keep.infinite_ammo;
+    o.rapid_fire = keep.rapid_fire;
+    o.no_recoil = keep.no_recoil;
+    o.game_speed = keep.game_speed;
+    o.god_mode = keep.god_mode;
+    o.one_hit_kill = keep.one_hit_kill;
+    o.infinite_grenades = keep.infinite_grenades;
+    o.unlock_levels = keep.unlock_levels;
     Changed();
 }
 
@@ -682,6 +747,10 @@ const rows::Row* rows::Page(int page, size_t* count) {
     if (page == kKeyboardPage) {
         *count = InputRows().size();
         return InputRows().data();
+    }
+    if (page == kCheatsPage) {
+        *count = std::size(kCheatRows);
+        return kCheatRows;
     }
     // LANGUAGE always shows: Indonesian is there whatever the disc
     static const std::vector<Row> rows(std::begin(kSettingsRows), std::end(kSettingsRows));
