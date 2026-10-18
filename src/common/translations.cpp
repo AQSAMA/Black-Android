@@ -57,6 +57,15 @@ constexpr Entry kEntries[] = {
     {"EDIT CONTROLS POSITION", {{}, {}, {}, {}, u"Ubah posisi kontrol"}},
     {"GYROSCOPE", {{}, {}, {}, {}, u"Giroskop"}},
     {"GYRO SENSITIVITY", {{}, {}, {}, {}, u"Sensitivitas giroskop"}},
+    {"CHEATS", {u"Triches", u"Cheats", u"Trucchi", u"Trucos", u"Cheat"}},
+    {"INFINITE AMMO", {u"Munitions infinies", u"Unendliche Munition", u"Munizioni infinite", u"Munición infinita", u"Amunisi tak terbatas"}},
+    {"INFINITE GRENADES", {u"Grenades infinies", u"Unendliche Granaten", u"Granate infinite", u"Granadas infinitas", u"Granat tak terbatas"}},
+    {"RAPID FIRE", {u"Tir rapide", u"Schnellfeuer", u"Fuoco rapido", u"Disparo rápido", u"Tembak cepat"}},
+    {"NO RECOIL", {u"Sans recul", u"Kein Rückstoß", u"Nessun rinculo", u"Sin retroceso", u"Tanpa recoil"}},
+    {"GOD MODE", {u"Invincibilité", u"Unverwundbarkeit", u"Invincibilità", u"Invencibilidad", u"Mode dewa"}},
+    {"ONE-HIT KILL", {u"Mort en un coup", u"Ein-Treffer-Kill", u"Uccisione con un colpo", u"Muerte de un golpe", u"Sekali tembak mati"}},
+    {"GAME SPEED", {u"Vitesse du jeu", u"Spielgeschwindigkeit", u"Velocità di gioco", u"Velocidad del juego", u"Kecepatan game"}},
+    {"UNLOCK ALL LEVELS", {u"Débloquer tous les niveaux", u"Alle Level freischalten", u"Sblocca tutti i livelli", u"Desbloquear todos los niveles", u"Buka semua level"}},
 
     // their values
     {"FULLSCREEN", {u"Plein écran", u"Vollbild", u"Schermo intero", u"Pantalla completa", u"Layar penuh"}},
