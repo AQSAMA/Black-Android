@@ -20,6 +20,7 @@
 # user's own game files
 /assets/
 /iso/
+/extracted/
 
 # runtime files
 black.toml
