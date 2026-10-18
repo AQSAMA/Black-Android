@@ -1,7 +1,8 @@
 // Button legends on keyboard and mouse: a menu prompt's icon goes and its text leads with the key, "(ENTER) confirm".
 // Texts naming the pad's buttons name the keys, a hint in play the key bound to its button. A change of device sets
 // the texts on screen again. Texts naming the console name the PC, whatever the device. On a touch screen (Android) the
-// hints in play name the touch control that presses the button, "HOLD USE TO SWAP".
+// hints in play name the touch control that presses the button, "HOLD USE TO SWAP", a menu prompt's icon goes as on
+// the keyboard and its text leads with the touch, "(TAP) CONFIRM", and the title's "PRESS START" is a tap anywhere.
 #include <strings.h>
 #include <algorithm>
 #include <cstdio>
@@ -27,8 +28,9 @@ namespace {
 
 constexpr uint32_t kResetTexts = 0xECA90;  // every text on screen is made again from its string
 // string ids
-constexpr uint32_t kConfirm = 0xE0CA7C5F;
-constexpr uint32_t kBack = 0x64199B75;
+constexpr uint32_t kConfirm = 0xE0CA7C5F;  // FE_CONFIRM
+constexpr uint32_t kBack = 0x64199B75;     // FE_BACK
+constexpr uint32_t kSelect = 0x12309FEF;   // FE_SELECT
 constexpr uint32_t kBackspace = 0x32D594BD;
 constexpr uint32_t kPressStart[] = {0x2FCCE936, 0x905E4EE0, 0x661A3A37};
 // a hint's "PRESS (A) :" strings, in the order the keyboard numbers the pad: A B X Y black white, the triggers,
@@ -48,17 +50,31 @@ void Replace(std::string& text, std::string_view from, std::string_view to) {
         text.replace(at, from.size(), to);
 }
 
-// a string as this PC words it, on the keyboard with its keys; empty when it stays
-std::string Wording(uint32_t id, const std::string& pad, bool keyboard) {
+bool PressStart(uint32_t id) { return std::find(std::begin(kPressStart), std::end(kPressStart), id) != std::end(kPressStart); }
+
+// a string as this PC words it, on the keyboard with its keys, on the touch screen with its touches; empty when it
+// stays. In the menus a drag moves the focus, a tap confirms, the touch controls' back button (an arrow) backs out.
+std::string Wording(uint32_t id, const std::string& pad, bool keyboard, bool touch) {
     std::string text = pad;
     Replace(text, "XBOX CONSOLE", "PC");
     Replace(text, "XBOX HARD DISK", "HARD DISK");
     Replace(text, "XBOX", "PC");
     Replace(text, "Xbox", "PC");
+    if (touch && !keyboard) {
+        if (id == kSelect) text = "(DRAG) " + text;
+        else if (id == kConfirm) text = "(TAP) " + text;
+        else if (id == kBack || id == kBackspace) text = "(<) " + text;
+        else if (PressStart(id)) {
+            Replace(text, "START", "ANYWHERE");
+            Replace(text, "Start", "anywhere");
+            Replace(text, "start", "anywhere");
+        }
+        return text == pad ? std::string() : text;
+    }
     if (!keyboard) return text == pad ? std::string() : text;
     if (id == kConfirm) text = "(ENTER) " + text;
     else if (id == kBack || id == kBackspace) text = "(ESC) " + text;
-    else if (std::find(std::begin(kPressStart), std::end(kPressStart), id) != std::end(kPressStart)) {
+    else if (PressStart(id)) {
         Replace(text, "start", "enter");
         Replace(text, "START", "ENTER");
     } else {
@@ -121,7 +137,7 @@ X86_FUNC(sub_001F3A80) {
         std::string press = game::Translated() ? app::Ui("PRESS") : "PRESS";
         std::snprintf(static_cast<char*>(HostPtr(it->second)), kHintSize, "%s %s :", press.c_str(), key.c_str());
     } else if (fresh) {
-        std::string text = Wording(id, ReadCString(ctx.eax, 1024), keyboard);
+        std::string text = Wording(id, ReadCString(ctx.eax, 1024), keyboard, touch);
         if (!text.empty() && (it->second = mem::AllocSystem(uint32_t(text.size() + 1))))
             std::memcpy(HostPtr(it->second), text.c_str(), text.size() + 1);
     }
@@ -142,7 +158,8 @@ void MenuPrompts(X86Context& ctx, uint8_t*) {
         }
         was = device;
     }
-    Prompts(flash::Level(flash::kMenuLevel), keyboard, 0);
+    // the pad's icons go on the touch screen too, its texts say the touch
+    Prompts(flash::Level(flash::kMenuLevel), keyboard || touch, 0);
     static uint32_t glyphs[4];
     static uint32_t keys;
     if (!keys && (keys = mem::AllocSystem(4 * kKeySize)))
