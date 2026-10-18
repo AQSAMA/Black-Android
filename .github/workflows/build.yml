@@ -25,6 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # the tags and commits, for the list of changes since the previous release
 
       - uses: actions/setup-java@v5
         with:
@@ -98,6 +100,14 @@ jobs:
           sha=$(sha256sum "$apk" | cut -d' ' -f1)
           sed -e "s|{{VERSION}}|$GITHUB_REF_NAME|g" -e "s|{{TAG}}|$GITHUB_REF_NAME|g" -e "s|{{APK}}|$apk|g" \
               -e "s|{{SIZE}}|$size|g" -e "s|{{SHA256}}|$sha|g" ci/release-notes.md > "$RUNNER_TEMP/release-notes.md"
+          # the commits since the previous tag, which the app's update dialog shows too
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo
+            echo "## What's Changed"
+            echo
+            git log --no-merges --pretty='* %s' ${prev:+"$prev.."}"$GITHUB_REF_NAME"
+          } >> "$RUNNER_TEMP/release-notes.md"
 
       - name: Release
         uses: softprops/action-gh-release@v2
