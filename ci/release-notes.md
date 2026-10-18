@@ -28,7 +28,7 @@
 ## 🚀 Installation
 
 1. Install **`{{APK}}`** on your phone.
-2. Open **Black** and allow **all files access** when it asks.
+2. Open **Black Android** and allow **all files access** when it asks.
 3. Copy the game into **`/storage/emulated/0/Black`**: the disc image (`.iso`), or `default.xbe` with its data folders.
 4. The game starts as soon as it finds the files.
 

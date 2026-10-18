@@ -116,9 +116,9 @@ public class BlackActivity extends SDLActivity {
     private void askAllFilesAccess() {
         dialog = new AlertDialog.Builder(this)
                 .setTitle("Storage access")
-                .setMessage("Black reads the game from the Black folder on your phone's storage:\n\n"
+                .setMessage("Black Android reads the game from the Black folder on your phone's storage:\n\n"
                         + "/storage/emulated/0/" + SHARED + "\n\n"
-                        + "On the next screen turn on \"Allow access to manage all files\" for Black, then come back.")
+                        + "On the next screen turn on \"Allow access to manage all files\" for Black Android, then come back.")
                 .setCancelable(false)
                 .setPositiveButton("Allow access", (d, w) -> openAccessSettings())
                 .setNegativeButton("Not now", (d, w) -> notNow = true)

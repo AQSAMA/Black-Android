@@ -8,7 +8,7 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
 
 ## Installation
 1. Install the APK.
-2. Open **Black** and allow **all files access** when it asks.
+2. Open **Black Android** and allow **all files access** when it asks.
 3. Copy the game into `/storage/emulated/0/Black`: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder once access is allowed, and starts the game as soon as it finds the files.
 
 If you don't grant that access, `Android/data/com.racas.black/files/assets` works too.
