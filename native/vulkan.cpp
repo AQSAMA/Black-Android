@@ -1025,6 +1025,8 @@ private:
     std::vector<VkSemaphore> swap_done_;
     bool vsync_ = true;
     bool swap_stale_ = false;
+    bool surface_lost_ = false;  // the driver said the window is gone: the surface is made again too
+    uint32_t surface_failures_ = 0;  // presents in a row without a surface, for the log
     uint32_t present_index_ = 0;  // the image the frame's submit signals the present of
 
     VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;
@@ -1114,12 +1116,18 @@ bool VulkanBackend::CreateInstance() {
     return true;
 }
 
+// the epoch is taken only once the surface is made: until then each present tries again
 bool VulkanBackend::CreateSurface() {
-    surface_epoch_ = host::SurfaceEpoch();
+    uint32_t epoch = host::SurfaceEpoch();
     if (!SDL_Vulkan_CreateSurface(host::Window(), instance_, nullptr, &surface_)) {
-        LOGE("vulkan: no surface: %s", SDL_GetError());
+        surface_ = VK_NULL_HANDLE;
+        if (surface_failures_++ % 100 == 0) LOGE("vulkan: no surface: %s", SDL_GetError());
         return false;
     }
+    if (surface_failures_) LOGI("vulkan: surface made after %u tries", surface_failures_ + 1);
+    surface_failures_ = 0;
+    surface_epoch_ = epoch;
+    surface_lost_ = false;
     return true;
 }
 
@@ -1241,8 +1249,14 @@ bool VulkanBackend::CreateDevice() {
 }
 
 bool VulkanBackend::CreateSwapchain() {
+    if (!surface_) return false;
     VkSurfaceCapabilitiesKHR caps;
-    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pd_, surface_, &caps));
+    VkResult cr = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pd_, surface_, &caps);
+    if (cr != VK_SUCCESS) {
+        if (cr == VK_ERROR_SURFACE_LOST_KHR) surface_lost_ = true;
+        LOGE("vulkan: surface capabilities failed (%d)", int(cr));
+        return false;
+    }
     uint32_t n = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(pd_, surface_, &n, nullptr);
     std::vector<VkSurfaceFormatKHR> formats(n);
@@ -1296,7 +1310,12 @@ bool VulkanBackend::CreateSwapchain() {
     ci.clipped = VK_TRUE;
     ci.oldSwapchain = swap_;
     VkSwapchainKHR fresh = VK_NULL_HANDLE;
-    VK_CHECK(vkCreateSwapchainKHR(dev_, &ci, nullptr, &fresh));
+    VkResult sr = vkCreateSwapchainKHR(dev_, &ci, nullptr, &fresh);
+    if (sr != VK_SUCCESS) {
+        if (sr == VK_ERROR_SURFACE_LOST_KHR || sr == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) surface_lost_ = true;
+        LOGE("vulkan: swap chain %dx%d failed (%d)", w, h, int(sr));
+        return false;
+    }
     DestroySwapchain();
     swap_ = fresh;
     swap_fmt_ = chosen.format;
@@ -2744,10 +2763,12 @@ void VulkanBackend::RecordLate(uint32_t data) {
 
 // ---- present
 
-// the swap chain made again when Android gave a new window, the size or vsync changed; false: nothing to show on
+// the swap chain made again when Android gave a new window, the size or vsync changed; the surface too when the
+// window is new, lost, or could not be made last time. false: nothing to show on, the frame is dropped
 bool VulkanBackend::AcquireImage(uint32_t& index) {
     if (!host::Foreground()) return false;
-    if (host::SurfaceEpoch() != surface_epoch_) {
+    if (!surface_ || surface_lost_ || host::SurfaceEpoch() != surface_epoch_) {
+        if (surface_) LOGI("vulkan: new surface (%s)", surface_lost_ ? "lost" : "new window");
         DestroySwapchain();
         if (surface_) vkDestroySurfaceKHR(instance_, surface_, nullptr);
         surface_ = VK_NULL_HANDLE;
@@ -2760,11 +2781,18 @@ bool VulkanBackend::AcquireImage(uint32_t& index) {
         app::Get().vsync != vsync_) {
         if (!CreateSwapchain()) return false;
     }
+    // a bounded wait: a window Android is taking away may never hand an image back
+    constexpr uint64_t kAcquireTimeout = 500'000'000;
     for (int tries = 0; tries < 2; tries++) {
-        VkResult r = vkAcquireNextImageKHR(dev_, swap_, UINT64_MAX, CurrentFrame().acquire, VK_NULL_HANDLE, &index);
+        VkResult r = vkAcquireNextImageKHR(dev_, swap_, kAcquireTimeout, CurrentFrame().acquire, VK_NULL_HANDLE, &index);
         if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) {
             if (r == VK_SUBOPTIMAL_KHR) swap_stale_ = true;
             return true;
+        }
+        if (r == VK_TIMEOUT || r == VK_NOT_READY) return false;
+        if (r == VK_ERROR_SURFACE_LOST_KHR) {
+            surface_lost_ = true;
+            return false;
         }
         if (r != VK_ERROR_OUT_OF_DATE_KHR || !CreateSwapchain()) return false;
     }
@@ -2923,7 +2951,8 @@ void VulkanBackend::Present(const Surface& front) {
         pi.pSwapchains = &swap_;
         pi.pImageIndices = &index;
         VkResult r = vkQueuePresentKHR(queue_, &pi);
-        if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR || r == VK_ERROR_SURFACE_LOST_KHR) swap_stale_ = true;
+        if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) swap_stale_ = true;
+        if (r == VK_ERROR_SURFACE_LOST_KHR) surface_lost_ = true;
     }
     presents_++;
     presents_seen_.store(presents_);
