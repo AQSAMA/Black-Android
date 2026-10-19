@@ -122,6 +122,9 @@ namespace app {
 namespace {
 
 const char* kModes[] = {"fullscreen", "borderless", "windowed"};
+// the defaults a settings file was written under: 2 has the frame rate unlimited and vsync off, which a file from
+// before takes once, its player's own choices kept from then on
+constexpr int kDefaults = 2;
 
 std::filesystem::path File() { return ExeDir() / kGame.settings; }
 
@@ -134,7 +137,8 @@ toml::table Table() {
                   {"fps_cap", int64_t(s.fps_cap)},
                   {"vsync", s.vsync},
                   {"anisotropic_filtering", int64_t(s.aniso)},
-                  {"join_ip", s.join_ip}};
+                  {"join_ip", s.join_ip},
+                  {"defaults", int64_t(kDefaults)}};
     for (const Option& o : kGame.options) {
         if (o.flag) t.insert(o.key, *o.flag);
         else t.insert(o.key, int64_t(*o.value));
@@ -146,10 +150,23 @@ toml::table Table() {
 // a phone renders the console's frame at about 720p unless the settings say otherwise
 constexpr uint32_t kFirstRunRenderPercent = 67;
 
+void PhoneFrameDefaults(Settings& s) {
+    s.fps_cap = 0;
+    s.vsync = false;
+}
+
 }  // namespace
 
+// the settings as a phone starts with them, for a first run and the options' restore
+Settings DefaultSettings() {
+    Settings s;
+    s.render_percent = kFirstRunRenderPercent;
+    PhoneFrameDefaults(s);
+    return s;
+}
+
 Settings& Get() {
-    static Settings s;
+    static Settings s = DefaultSettings();
     return s;
 }
 
@@ -159,7 +176,6 @@ void Load() {
     try {
         t = toml::parse_file(File().string());
     } catch (...) {
-        s.render_percent = kFirstRunRenderPercent;
         return;
     }
     std::string mode = t["display_mode"].value_or(std::string(kModes[uint32_t(s.display_mode)]));
@@ -172,6 +188,7 @@ void Load() {
     s.vsync = t["vsync"].value_or(s.vsync);
     s.aniso = t["anisotropic_filtering"].value_or(s.aniso);
     s.join_ip = t["join_ip"].value_or(s.join_ip);
+    if (t["defaults"].value_or(int64_t(0)) < kDefaults) PhoneFrameDefaults(s);
     for (const Option& o : kGame.options) {
         if (o.flag) *o.flag = t[o.key].value_or(*o.flag);
         else *o.value = t[o.key].value_or(*o.value);

@@ -50,6 +50,8 @@ void CheckForUpdates();
 
 namespace app {
 
+Settings DefaultSettings();  // native/main.cpp: a phone's first run, unlimited frame rate and vsync off
+
 namespace {
 
 std::atomic<bool> g_open{false};
@@ -352,7 +354,7 @@ bool StepDisplayRow(int id, int step, Settings& s, char (&text)[64]) {
             uint32_t cap = kFpsCaps[StepTable(kFpsCaps, s.fps_cap, step)];
             if (cap == kFpsCapRefresh) std::snprintf(text, sizeof(text), "REFRESH RATE");
             else if (cap) std::snprintf(text, sizeof(text), "%u", cap);
-            else std::snprintf(text, sizeof(text), "UNLIMITED");
+            else std::snprintf(text, sizeof(text), "UNLIMITED (DEFAULT)");
             return true;
         }
         default:
@@ -528,7 +530,7 @@ void RestoreDefaults(int page) {
         return;
     }
     game::Options keep = o;
-    Get() = Settings{};
+    Get() = DefaultSettings();
     o = game::Options{};
     o.mouse_sensitivity = keep.mouse_sensitivity;
     o.invert_mouse = keep.invert_mouse;
