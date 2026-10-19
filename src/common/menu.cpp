@@ -229,42 +229,54 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
 using rows::Kind;
 using rows::Row;
 
-constexpr Row kSettingsRows[] = {
+// the recomp's settings in pages of their own, grouped within; the game's options menu shows the headings too
+constexpr Row kGraphicsRows[] = {
     {Kind::Heading, -1, "DISPLAY"},
     {Kind::Value, kRenderResolution, "RENDER RESOLUTION"},
     {Kind::Value, kFov, "FIELD OF VIEW"},
     {Kind::Value, kViewmodelFov, "VIEWMODEL FIELD OF VIEW"},
+    {Kind::Value, kFmvScale, "FMV SCALE"},
+    {Kind::Heading, -1, "PERFORMANCE"},
     {Kind::Value, kVsync, "VERTICAL SYNC"},
     {Kind::Value, kMaxFps, "MAX FRAME RATE"},
     {Kind::Value, kFpsCounter, "FPS COUNTER"},
-    {Kind::Value, kFmvScale, "FMV SCALE"},
-    {Kind::Heading, -1, "GRAPHICS"},
+    {Kind::Heading, -1, "QUALITY"},
     {Kind::Value, kAniso, "ANISOTROPIC FILTERING"},
     {Kind::Value, kDrawDistance, "DRAW DISTANCE"},
     {Kind::Value, kReloadBlur, "RELOAD BLUR"},
-    {Kind::Heading, -1, "GENERAL"},
-    {Kind::Value, kSkipIntros, "SKIP INTROS"},
-    {Kind::Value, kLanguage, "LANGUAGE"},
-    {Kind::Value, kAudioOutput, "AUDIO OUTPUT"},
-    {Kind::Value, kCheckUpdates, "CHECK FOR UPDATES"},
+};
+
+constexpr Row kTouchRows[] = {
     {Kind::Heading, -1, "TOUCH"},
     {Kind::Value, kTouchLayout, "CONTROLS LAYOUT"},
     {Kind::Value, kTouchOpacity, "CONTROLS OPACITY"},
     {Kind::Value, kTouchSize, "CONTROLS SIZE"},
     {Kind::Value, kTouchEdit, "EDIT CONTROLS POSITION"},
+    {Kind::Heading, -1, "MOTION CONTROLS"},
     {Kind::Value, kGyro, "GYROSCOPE"},
     {Kind::Value, kGyroSensitivity, "GYRO SENSITIVITY"},
 };
 
+// LANGUAGE always shows: Indonesian is there whatever the disc
+constexpr Row kGeneralRows[] = {
+    {Kind::Value, kLanguage, "LANGUAGE"},
+    {Kind::Value, kSkipIntros, "SKIP INTROS"},
+    {Kind::Value, kAudioOutput, "AUDIO OUTPUT"},
+    {Kind::Heading, -1, "UPDATES"},
+    {Kind::Value, kCheckUpdates, "CHECK FOR UPDATES"},
+};
+
 // a page of its own, apart from the recomp's settings
 constexpr Row kCheatRows[] = {
-    {Kind::Heading, -1, "CHEATS"},
+    {Kind::Heading, -1, "WEAPONS"},
     {Kind::Value, kInfiniteAmmo, "INFINITE AMMO"},
     {Kind::Value, kInfiniteGrenades, "INFINITE GRENADES"},
     {Kind::Value, kRapidFire, "RAPID FIRE"},
     {Kind::Value, kNoRecoil, "NO RECOIL"},
+    {Kind::Heading, -1, "PLAYER"},
     {Kind::Value, kGodMode, "GOD MODE"},
     {Kind::Value, kOneHitKill, "ONE-HIT KILL"},
+    {Kind::Heading, -1, "GAME"},
     {Kind::Value, kGameSpeed, "GAME SPEED"},
     {Kind::Value, kUnlockLevels, "UNLOCK ALL LEVELS"},
 };
@@ -478,10 +490,13 @@ std::string KeyText(std::string keys) {
     return keys;
 }
 
-const char* const kPages[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CHEATS"};
+// as options_menu.cpp's captions
+const char* const kPages[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD", "CHEATS"};
 constexpr int kSettingsPage = 0;
-constexpr int kKeyboardPage = 1;
-constexpr int kCheatsPage = 2;
+constexpr int kTouchPage = 1;
+constexpr int kGeneralPage = 2;
+constexpr int kKeyboardPage = 3;
+constexpr int kCheatsPage = 4;
 
 void RestoreDefaults(int page) {
     game::Options& o = game::Opt();
@@ -763,10 +778,16 @@ const rows::Row* rows::Page(int page, size_t* count) {
         *count = std::size(kCheatRows);
         return kCheatRows;
     }
-    // LANGUAGE always shows: Indonesian is there whatever the disc
-    static const std::vector<Row> rows(std::begin(kSettingsRows), std::end(kSettingsRows));
-    *count = rows.size();
-    return rows.data();
+    if (page == kTouchPage) {
+        *count = std::size(kTouchRows);
+        return kTouchRows;
+    }
+    if (page == kGeneralPage) {
+        *count = std::size(kGeneralRows);
+        return kGeneralRows;
+    }
+    *count = std::size(kGraphicsRows);
+    return kGraphicsRows;
 }
 
 std::string rows::Value(const Row& row, int step) {
@@ -774,6 +795,9 @@ std::string rows::Value(const Row& row, int step) {
 }
 
 void rows::Defaults(int page) { RestoreDefaults(page); }
+
+// the recomp's own pages share one set of defaults, too much to undo from one of them
+bool rows::Restorable(int page) { return page == kKeyboardPage || page == kCheatsPage; }
 
 bool rows::Enabled(const Row&) { return true; }
 

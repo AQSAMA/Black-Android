@@ -1,13 +1,15 @@
-// Recomp settings in the game's own options menus: RECOMP SETTINGS and MOUSE AND KEYBOARD buttons under the stock ones
-// load the page again with the F10 panel's rows in their place. A row is four copies of a stock button clip, its name,
-// its value and an arrow each side of the value; the name's copy stands in for the script's button object, so the
-// script moves the focus and the cursor works, and a tap on an arrow steps the value as the dpad does. The pause
-// menu's options have room for one button, its rows start with the panel's PAGE row.
+// Recomp settings in the game's own options menus: a button a page (GRAPHICS, TOUCH CONTROLS, GENERAL, MOUSE AND
+// KEYBOARD, CHEATS) under the stock ones loads the page again with the F10 panel's rows in their place. A row is four
+// copies of a stock button clip, its name, its value and an arrow each side of the value; the name's copy stands in
+// for the script's button object, so the cursor works, and a tap on an arrow steps the value as the dpad does. Up and
+// down move the focus here, over the groups' headings, and arrows over and under the rows show more are hidden. The
+// pause menu's options have room for one button, its rows start with the panel's PAGE row.
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "common/menu.h"
@@ -36,7 +38,8 @@ using flash::Text;
 namespace {
 
 constexpr uint32_t kHashTable = 0x2AC908;
-const char* const kCaptions[] = {"RECOMP SETTINGS", "MOUSE AND KEYBOARD", "CHEATS"};
+// as menu.cpp's pages
+const char* const kCaptions[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD", "CHEATS"};
 constexpr int kEntries = int(std::size(kCaptions));
 constexpr int kSlots = 8;
 constexpr int kDepth = 100;
@@ -59,6 +62,9 @@ constexpr float kTextHeight = 15.0f;      // the stock buttons' text fields
 constexpr float kTextLeft = 2.0f;         // the text field in its button's label clip
 constexpr float kArrowSpace = 16.0f;      // an arrow and the gap to its value, in the rows' units
 const char* const kArrows[] = {"<", ">"};
+const char* const kMore[] = {"▲", "▼"};  // over and under the rows while more are hidden that way
+constexpr float kMoreAbove = 0.9f;  // the up arrow's place over the first row, in rows
+constexpr float kMoreScale = 1.3f;  // the font draws them as small dpad icons: a little bigger than the rows
 
 // the stock bar on frame 10: its box's x scale, the x of its right tick, right line and Scan
 struct Bar {
@@ -89,7 +95,7 @@ struct Host {
 };
 constexpr Host kHosts[] = {
     {"OptionsMenuXbox", "TextAnim", "_level4.Main.TextAnim.ControllerSetup_Text", "Playerprofile_Text", 25.0f,
-     "controllerButton", "Playerprofile", 3, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
+     "controllerButton", "Playerprofile", kEntries, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
      {"ControllerSetup_Text", "SoundSetup_Text", "PictureSetup_Text", "Playerprofile_Text"},
      {1.0f, 245.0f, 445.0f, -5.0f}},
     {"PauseMenuOptionXbox", nullptr, "_level4.Main.ToggleCrouch", "ToggleCrouch", 222.0f,
@@ -113,7 +119,8 @@ enum {
     kValue = kName + kSlots,
     kLeft = kValue + kSlots,
     kRight = kLeft + kSlots,
-    kFields = kRight + kSlots
+    kScroll = kRight + kSlots,
+    kFields = kScroll + 2
 };
 constexpr uint32_t kFieldSize = 128;  // the HUD's message box reads 127 bytes of a string (0x12B800)
 Field g_fields[kFields];
@@ -129,6 +136,7 @@ struct Page {
     uint32_t value[kSlots] = {};
     uint32_t arrow[2][kSlots] = {};  // left, right
     float right_x[kSlots] = {};      // the right arrow's place, past its row's value
+    uint32_t more[2] = {};           // the scroll arrows, up and down
     size_t slots = 0;
     size_t top = 0;
     std::vector<const Row*> rows;  // null restores the defaults
@@ -205,6 +213,8 @@ void Follow(const Page& p) {
         follow(p.value[i], h.value_x + kArrowSpace, y);
         follow(p.arrow[1][i], p.right_x[i] ? p.right_x[i] : h.value_x + 2 * kArrowSpace, y);
     }
+    follow(p.more[0], h.name_x, -h.pitch * kMoreAbove);
+    follow(p.more[1], h.name_x, h.pitch * float(p.slots));
 }
 
 void Sound(X86Context& ctx) {
@@ -242,17 +252,25 @@ bool Entries(X86Context& ctx, uint32_t root, uint32_t holder) {
     return true;
 }
 
-// the rows of the page's mode, behind the PAGE row where one button opens both
+bool IsHeading(const Row* row) { return row && row->kind == app::rows::Kind::Heading; }
+
+// the rows of the page's mode with their groups' headings, behind the PAGE row where one button opens both
 void Fill(Page& p) {
     p.rows.clear();
     if (p.host->entries == 1) p.rows.push_back(&kPageRow);
     size_t count = 0;
     const Row* list = app::rows::Page(p.mode - 1, &count);
-    for (size_t i = 0; i < count; i++)
-        if (list[i].kind != app::rows::Kind::Heading) p.rows.push_back(&list[i]);
-    if (p.mode > 1) p.rows.push_back(nullptr);
+    for (size_t i = 0; i < count; i++) p.rows.push_back(&list[i]);
+    if (app::rows::Restorable(p.mode - 1)) p.rows.push_back(nullptr);
     p.slots = std::min(p.slots, p.rows.size());
     p.top = 0;
+}
+
+// the first row the focus can be on, past the headings
+size_t FirstRow(const Page& p) {
+    size_t i = 0;
+    while (i + 1 < p.rows.size() && IsHeading(p.rows[i])) i++;
+    return i;
 }
 
 // the panel's rows in place of the stock buttons
@@ -284,6 +302,14 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
         for (int side = 0; side < 2; side++)
             if (!Show(ctx, (side ? kRight : kLeft) + int(i), p.arrow[side][i], nullptr, " ")) return false;
     }
+    for (int side = 0; side < 2; side++) {
+        char name[16];
+        std::snprintf(name, sizeof(name), "RC_S%d", side);
+        p.more[side] = Copy(ctx, holder, name, kDepth + 4 * kSlots + side);
+        if (!p.more[side] || !Show(ctx, kScroll + side, p.more[side], nullptr, " ")) return false;
+        G<float>(p.more[side] + flash::kClipScaleX) = h.scale * kMoreScale;
+        G<float>(p.more[side] + flash::kClipScaleY) = h.scale * kMoreScale;
+    }
     p.first = p.name[0];
     Follow(p);
     CallGuest(ctx, flash::kRunActions, {R32(flash::kPlayer)});
@@ -298,7 +324,7 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
     // back is the options page, not its own back
     Set(ctx, menu, "mfuncFunctionBack", 0);
     Set(ctx, menu, "mstrPageBack", String(ctx, h.page));
-    Focus(ctx, p.name[0]);
+    Focus(ctx, p.name[std::min(FirstRow(p), p.slots - 1)]);
     return true;
 }
 
@@ -307,7 +333,7 @@ std::string ValueText(const Page& p, size_t i) {
     const Row* row = p.rows[i];
     if ((p.capture == 1 || p.capture == 2) && p.bind == i) return app::Ui("PRESS A KEY");
     if (row == &kPageRow) return app::Ui(kCaptions[p.mode - 1]);
-    if (!row) return " ";
+    if (!row || IsHeading(row)) return " ";
     std::string value = app::rows::Value(*row);
     // key names as they are
     if (row->kind == app::rows::Kind::Bind && value != "UNBOUND") return value;
@@ -442,35 +468,44 @@ void UpdateCapture(uint32_t ui, uint32_t id) {
     W32(ui + kMenuInput, 0);
 }
 
-// past either end the rows scroll, then go round; false off the ends
+// up and down move the focus here, not in the script: over the headings, round the ends, the rows scrolling to
+// show it with its heading; false for any other input
 bool UpdateScroll(X86Context& ctx, size_t slot, uint32_t id) {
+    if (id != kInputUp && id != kInputDown) return false;
     Page& p = g_page;
-    size_t hidden = p.rows.size() - p.slots;
-    if (id == kInputUp && slot == 0) {
-        if (p.top) {
-            p.top--;
-        } else {
-            p.top = hidden;
-            Focus(ctx, p.name[p.slots - 1]);
-        }
-        return true;
-    }
-    if (id == kInputDown && slot == p.slots - 1) {
-        if (p.top < hidden) {
-            p.top++;
-        } else {
-            p.top = 0;
-            Focus(ctx, p.name[0]);
-        }
-        return true;
-    }
-    return false;
+    size_t n = p.rows.size();
+    size_t at = p.top + slot, to = at;
+    do to = id == kInputDown ? (to + 1) % n : (to + n - 1) % n;
+    while (IsHeading(p.rows[to]) && to != at);
+    size_t shown = to > 0 && IsHeading(p.rows[to - 1]) ? to - 1 : to;
+    if (shown < p.top) p.top = shown;
+    if (to >= p.top + p.slots) p.top = to + 1 - p.slots;
+    Focus(ctx, p.name[to - p.top]);
+    return true;
+}
+
+// a tap on a scroll arrow (mouse.cpp): the rows move one that way; the focus stays on its row while it shows, else
+// takes the nearest one in sight
+int g_scroll_tap = 0;  // -1 up, 1 down
+
+bool ScrollMore(const Page& p, int dir) { return dir < 0 ? p.top > 0 : p.top + p.slots < p.rows.size(); }
+
+void ScrollRow(X86Context& ctx, Page& p, int dir, size_t slot) {
+    size_t at = slot < p.slots ? p.top + slot : p.top;
+    p.top = dir < 0 ? p.top - 1 : p.top + 1;
+    size_t first = p.top, last = p.top + p.slots - 1;
+    at = std::clamp(at, first, last);
+    // off a heading, into the rows in sight
+    size_t step = at == last ? size_t(-1) : 1;
+    while (IsHeading(p.rows[at]) && at + step >= first && at + step <= last) at += step;
+    Focus(ctx, p.name[at - p.top]);
 }
 
 // left, right or confirm on a row: the PAGE row turns the page, a value steps, a binding listens, the last restores
 void ApplyRowInput(size_t slot, uint32_t id, bool locked) {
     Page& p = g_page;
     const Row* row = p.rows[p.top + slot];
+    if (IsHeading(row)) return;
     bool value = row && row->kind == app::rows::Kind::Value;
     bool changes = id >= kInputLeft && id <= kInputConfirm;
     if (row == &kPageRow && changes) {
@@ -514,7 +549,8 @@ void UpdateTexts(X86Context& ctx, Page& p) {
         const Row* row = p.rows[p.top + i];
         std::string value = ValueText(p, p.top + i);
         bool arrows = Steppable(row) && !p.capture;
-        Write(g_fields[kName + i], app::Ui(row ? row->label : "RESTORE DEFAULTS"));
+        std::string name = app::Ui(row ? row->label : "RESTORE DEFAULTS");
+        Write(g_fields[kName + i], IsHeading(row) ? "- " + name + " -" : name);
         Write(g_fields[kValue + i], value);
         for (int side = 0; side < 2; side++) Write(g_fields[(side ? kRight : kLeft) + i], arrows ? kArrows[side] : " ");
         uint32_t from = flash::FirstChild(p.name[i]);
@@ -525,6 +561,8 @@ void UpdateTexts(X86Context& ctx, Page& p) {
         float scale = h.scale * G<float>(from + flash::kClipScaleX);
         p.right_x[i] = h.value_x + kArrowSpace + (kTextLeft + Measure(font, value) * kTextHeight) * scale + kArrowGap;
     }
+    Write(g_fields[kScroll], p.top > 0 ? kMore[0] : " ");
+    Write(g_fields[kScroll + 1], p.top + p.slots < p.rows.size() ? kMore[1] : " ");
 }
 
 void Tick(X86Context& ctx, uint32_t ui) {
@@ -565,6 +603,14 @@ void Tick(X86Context& ctx, uint32_t ui) {
         return;
     }
     size_t slot = size_t(std::find(p.name, p.name + p.slots, focus) - p.name);
+    if (int dir = std::exchange(g_scroll_tap, 0); dir && !p.capture && ScrollMore(p, dir)) {
+        ScrollRow(ctx, p, dir, slot);
+        Sound(ctx);
+        W32(ui + kMenuInput, 0);
+        UpdateTexts(ctx, p);
+        Follow(p);
+        return;
+    }
     if (p.capture) {
         UpdateCapture(ui, id);
     } else if (slot < p.slots) {
@@ -608,6 +654,23 @@ bool OptionsRow(uint32_t button, uint32_t& value, float (&arrows)[2][2]) {
     }
     return false;
 }
+
+// mouse.cpp: a group's heading among the rows, which the cursor passes over
+bool OptionsHeading(uint32_t button) {
+    const Page& p = g_page;
+    if (p.mode <= 0 || p.failed) return false;
+    for (size_t i = 0; i < p.slots; i++)
+        if (p.name[i] == button) return IsHeading(p.rows[p.top + i]);
+    return false;
+}
+
+// mouse.cpp: the scroll arrow that way (-1 up, 1 down) while it shows, 0 when it does not; a tap on it moves the rows one
+uint32_t OptionsScrollArrow(int dir) {
+    const Page& p = g_page;
+    if (p.mode <= 0 || p.failed || p.capture || !ScrollMore(p, dir)) return 0;
+    return p.more[dir > 0];
+}
+void OptionsScrollTap(int dir) { g_scroll_tap = dir; }
 
 // prompts.cpp's string lookup: a text of the page by its string id, 0 for none
 uint32_t OptionsText(uint32_t id) {

@@ -22,9 +22,11 @@ struct Row {
     int id;  // a bind row's input action
     const char* label;
 };
-const Row* Page(int page, size_t* count);         // 0 the settings, 1 mouse and keyboard
+// 0 graphics, 1 touch controls, 2 general, 3 mouse and keyboard, 4 cheats
+const Row* Page(int page, size_t* count);
 std::string Value(const Row& row, int step = 0);  // what the row shows, stepped first when step is not zero
 void Defaults(int page);
+bool Restorable(int page);  // the page ends with RESTORE DEFAULTS in the game's options
 // false for a row shown greyed that takes no change: HDR output without an HDR display
 bool Enabled(const Row& row);
 // a row whose step opens something rather than changing a value: no arrows beside it in the game's options

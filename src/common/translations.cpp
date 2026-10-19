@@ -29,6 +29,14 @@ constexpr Entry kEntries[] = {
     {"PRESS A KEY", {u"Appuyez sur une touche", u"Taste drücken", u"Premi un tasto", u"Pulsa una tecla", u"Tekan tombol"}},
     {"UNBOUND", {u"Non assigné", u"Nicht belegt", u"Non assegnato", u"Sin asignar", u"Belum diatur"}},
     {"TOUCH", {{}, {}, {}, {}, u"Sentuh"}},
+    {"QUALITY", {u"Qualité", u"Qualität", u"Qualità", u"Calidad", u"Kualitas"}},
+    {"PERFORMANCE", {u"Performances", u"Leistung", u"Prestazioni", u"Rendimiento", u"Performa"}},
+    {"TOUCH CONTROLS", {u"Commandes tactiles", u"Touch-Steuerung", u"Comandi touch", u"Controles táctiles", u"Kontrol sentuh"}},
+    {"MOTION CONTROLS", {u"Commandes de mouvement", u"Bewegungssteuerung", u"Comandi di movimento", u"Controles de movimiento", u"Kontrol gerak"}},
+    {"UPDATES", {u"Mises à jour", u"Updates", u"Aggiornamenti", u"Actualizaciones", u"Pembaruan"}},
+    {"WEAPONS", {u"Armes", u"Waffen", u"Armi", u"Armas", u"Senjata"}},
+    {"PLAYER", {u"Joueur", u"Spieler", u"Giocatore", u"Jugador", u"Pemain"}},
+    {"GAME", {u"Jeu", u"Spiel", u"Gioco", u"Juego", u"Permainan"}},
 
     // RECOMP SETTINGS rows
     {"MONITOR", {u"Écran", u"Monitor", u"Monitor", u"Monitor", u"Monitor"}},

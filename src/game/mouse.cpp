@@ -55,6 +55,9 @@ void HoldAim(X86Context& ctx, uint8_t*) {
 namespace game {
 bool OptionsCapturing();  // options_menu.cpp
 bool OptionsRow(uint32_t button, uint32_t& value, float (&arrows)[2][2]);
+bool OptionsHeading(uint32_t button);
+uint32_t OptionsScrollArrow(int dir);
+void OptionsScrollTap(int dir);
 }
 
 namespace {
@@ -210,6 +213,8 @@ Aim Point(X86Context& ctx, const Node* buttons, size_t count, uint32_t map, cons
     bool clips = false;
     for (size_t i = 0; i < count; i++) {
         uint32_t button = buttons[i].object;
+        // a heading can't be focused: the steps toward it would go back and forth over it
+        if (game::OptionsHeading(button)) continue;
         uint32_t clip = Find(buttons[i].members, "movieClip");
         uint32_t options = Find(buttons[i].members, "mChoiceList");
         uint32_t members = Members(ctx, options);
@@ -290,6 +295,15 @@ uint32_t CursorInput(X86Context& ctx, const MenuPage& page, const Pointer& p) {
     size_t count = Reach(ctx, page.focus, kButtonLinks, buttons);
     if (page.list != g_logged_page) LOGI("menu cursor: page %s, %zu buttons", page.name, count);
     g_logged_page = page.list;
+    // a click on a recomp page's scroll arrow moves its rows one
+    for (int dir : {-1, 1}) {
+        uint32_t arrow = game::OptionsScrollArrow(dir);
+        if (p.click && arrow && Over(ctx, arrow, p.x, p.y, kPad)) {
+            game::OptionsScrollTap(dir);
+            g_aim = {};
+            return kNoInput;
+        }
+    }
     // a click's aim holds while the cursor stays on its button
     if (p.moved || p.click) {
         Aim over = Point(ctx, buttons, count, Member(ctx, page.root, "MyMap"), p);
