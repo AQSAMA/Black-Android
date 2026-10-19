@@ -7,6 +7,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.Toast;
@@ -39,6 +41,8 @@ public class BlackActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        for (View v : new View[] {mSurface, mLayout})
+            if (v != null) v.setOnCapturedPointerListener(BlackActivity::onCapturedPointer);
         File own = getExternalFilesDir(null);
         if (own != null) new File(own, "assets").mkdirs();
         // every launch: a newer release is shown once nothing else is asked
@@ -47,6 +51,33 @@ public class BlackActivity extends SDLActivity {
             update = r;
             tellOfUpdate();
         });
+    }
+
+    // The mouse while the game holds it (SDL's relative mode, Android's pointer capture). SDL's own handler passes on
+    // only moves with no button held and the wheel: clicks and the moves while firing were lost. Each sample of a
+    // batch is a move of its own, as SDL's C side takes them.
+    private static boolean onCapturedPointer(View view, MotionEvent e) {
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_HOVER_MOVE:
+                for (int h = 0; h < e.getHistorySize(); h++)
+                    onNativeMouse(0, MotionEvent.ACTION_MOVE, e.getHistoricalX(h), e.getHistoricalY(h), true);
+                onNativeMouse(0, MotionEvent.ACTION_MOVE, e.getX(), e.getY(), true);
+                return true;
+            case MotionEvent.ACTION_BUTTON_PRESS:
+                onNativeMouse(e.getButtonState(), MotionEvent.ACTION_DOWN, 0, 0, true);
+                return true;
+            case MotionEvent.ACTION_BUTTON_RELEASE:
+                onNativeMouse(e.getButtonState(), MotionEvent.ACTION_UP, 0, 0, true);
+                return true;
+            case MotionEvent.ACTION_SCROLL:
+                onNativeMouse(0, MotionEvent.ACTION_SCROLL, e.getAxisValue(MotionEvent.AXIS_HSCROLL),
+                        e.getAxisValue(MotionEvent.AXIS_VSCROLL), false);
+                return true;
+            default:
+                // the down and up a press brings with it: the button events above carry it
+                return true;
+        }
     }
 
     // CHECK FOR UPDATES in the options menu, from the game's thread: the answer always shows, up to date or offline

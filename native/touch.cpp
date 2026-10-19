@@ -1011,8 +1011,8 @@ bool OnEvent(const SDL_Event& e) {
             input::g_keyboard = true;
             input::g_touch = false;
             if (input::Active() && input::Play()) {
-                input::g_dx += int(std::lround(e.motion.xrel));
-                input::g_dy += int(std::lround(e.motion.yrel));
+                // the fractions carried over: a held mouse sends small moves, rounded each they were lost
+                AddLook(e.motion.xrel, e.motion.yrel);
             } else {
                 std::lock_guard lock(g_lock);
                 g_cursor_x = e.motion.x;
@@ -1449,6 +1449,12 @@ bool Firing() {
 // main thread, each turn of the event loop: the on-screen keyboard while a name is typed
 void Pump() {
     gyro::Pump();
+    // a mouse in play is captured as on a PC: no pointer over the picture and no screen edge to stop a turn. Let go
+    // in the menus, the panel, the background and once the touch screen is used; asked again whenever Android took
+    // it away
+    SDL_Window* window = host::Window();
+    bool capture = input::g_keyboard && !input::g_touch && LookActive();
+    if (window && capture != SDL_GetWindowRelativeMouseMode(window)) SDL_SetWindowRelativeMouseMode(window, capture);
     bool want = input::g_text && input::Active();
     if (want == input::g_text_shown) return;
     input::g_text_shown = want;
