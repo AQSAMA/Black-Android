@@ -1,9 +1,12 @@
 package com.racas.black;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.storage.StorageManager;
@@ -174,18 +177,39 @@ public class BlackActivity extends SDLActivity {
         else if (!mBrokenLibraries) nativeLooseRelease();  // its ups go elsewhere while the game is not in front
     }
 
+    @SuppressWarnings("deprecation")
     private void hideSystemBars() {
+        if (Build.VERSION.SDK_INT < 30) {
+            // Android 10: the older immersive flags
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            return;
+        }
         WindowInsetsController c = getWindow().getInsetsController();
         if (c == null) return;
         c.hide(WindowInsets.Type.systemBars());
         c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
+    // Android 11 on has all files access, a page of its own in the settings; Android 10 the storage permission, with
+    // the legacy storage the manifest asks for
+    private static final boolean ALL_FILES_ACCESS = Build.VERSION.SDK_INT >= 30;
+    private static final int STORAGE_REQUEST = 0x426C;
+    private boolean storageAsked;  // the permission was asked for this run
+
+    private boolean hasStorageAccess() {
+        if (ALL_FILES_ACCESS) return Environment.isExternalStorageManager();
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
     private void askForGame() {
         if (importing || (dialog != null && dialog.isShowing())) return;
         File own = getExternalFilesDir(null);
         if (own != null && hasGame(new File(own, "assets"))) return;
-        if (!Environment.isExternalStorageManager()) {
+        if (!hasStorageAccess()) {
             if (!notNow) askAllFilesAccess();
             return;
         }
@@ -200,6 +224,16 @@ public class BlackActivity extends SDLActivity {
     // the Black folder on each SD card or USB stick mounted, as native/game_files.cpp looks in them
     private List<File> cardFolders() {
         List<File> out = new ArrayList<>();
+        if (!ALL_FILES_ACCESS) {
+            // Android 10: each card's root above the app's own folder on it, <root>/Android/data/<package>/files
+            File[] own = getExternalFilesDirs(null);
+            for (int i = 1; i < own.length; i++) {
+                File root = own[i];
+                for (int up = 0; root != null && up < 4; up++) root = root.getParentFile();
+                if (root != null) out.add(new File(root, SHARED));
+            }
+            return out;
+        }
         StorageManager sm = getSystemService(StorageManager.class);
         if (sm == null) return out;
         for (StorageVolume v : sm.getStorageVolumes()) {
@@ -258,7 +292,9 @@ public class BlackActivity extends SDLActivity {
                 .setTitle("Storage access")
                 .setMessage("Black Android reads the game from the Black folder on your phone's storage:\n\n"
                         + "/storage/emulated/0/" + SHARED + "\n\n"
-                        + "On the next screen turn on \"Allow access to manage all files\" for Black Android, then come back.")
+                        + (ALL_FILES_ACCESS
+                                ? "On the next screen turn on \"Allow access to manage all files\" for Black Android, then come back."
+                                : "Allow Black Android to access your storage on the next screen."))
                 .setCancelable(false)
                 .setPositiveButton("Allow access", (d, w) -> openAccessSettings())
                 .setNegativeButton("Not now", (d, w) -> notNow = true)
@@ -299,7 +335,7 @@ public class BlackActivity extends SDLActivity {
             importing = false;  // the picker was closed: onResume asks again
             return;
         }
-        File dir = Environment.isExternalStorageManager()
+        File dir = hasStorageAccess()
                 ? new File(Environment.getExternalStorageDirectory(), SHARED)
                 : new File(getExternalFilesDir(null), "assets");
         importer.copy(uri, dir, ok -> {
@@ -309,8 +345,21 @@ public class BlackActivity extends SDLActivity {
         });
     }
 
-    // the app's own page of the access, or the list of every app's where a phone has no such page
+    // the app's own page of the access, or the list of every app's where a phone has no such page. Android 10 asks
+    // for the storage permission, or opens the app's details once the player has turned it down for good
     private void openAccessSettings() {
+        if (!ALL_FILES_ACCESS) {
+            boolean ask = !storageAsked || shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE);
+            if (ask) {
+                storageAsked = true;
+                requestPermissions(new String[] {Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_REQUEST);
+            } else {
+                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+            }
+            return;
+        }
         try {
             startActivity(new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                     Uri.parse("package:" + getPackageName())));
