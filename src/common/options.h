@@ -45,5 +45,6 @@ inline std::atomic<bool> g_hide_hud{false};  // the toggle HUD key: the gameplay
 inline std::atomic<bool> g_focus_paused{false};  // the game thread waits while the app is in the background
 inline std::atomic<uint32_t> g_focus_pauses{0};  // focus pauses ended so far
 void WaitWhileUnfocused();  // native/game_host.cpp: game thread, before the present
+bool HudShown();  // src/game/hud.cpp: the player's HUD drew lately, a hint's pause too
 
 }  // namespace game

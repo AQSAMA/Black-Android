@@ -2,6 +2,8 @@
 // layer draws gets x' = x * narrow + anchor * spare width: HUD parts by their component's anchor, the rest 4:3 in
 // the middle.
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <mutex>
 #include <vector>
@@ -226,8 +228,27 @@ X86_FUNC(sub_000DA4B0) {
     g_hud = 0;
 }
 
+namespace {
+
+// when the player's HUD last drew an item, hidden by the player or not: the game shows it while the player is in the
+// level, a hint's pause too, and not over a cutscene or a loading screen
+std::atomic<int64_t> g_hud_ms{0};
+
+int64_t NowMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+}  // namespace
+
+namespace game {
+// native/touch.cpp: the touch controls stay up over a hint's pause, which stops the look as a cutscene does
+bool HudShown() { return NowMs() - g_hud_ms.load(std::memory_order_relaxed) < 250; }
+}  // namespace game
+
 // A list's item before it draws, ebx. Hidden, the HUD draws only the title card's fade: false skips the callback
 bool HudItem(X86Context& ctx, uint8_t*) {
+    if (g_hud && R32(ctx.ebx + kItemCallback) != kTitleFade) g_hud_ms.store(NowMs(), std::memory_order_relaxed);
     if (g_hud && game::g_hide_hud && R32(ctx.ebx + kItemCallback) != kTitleFade) return false;
     uint32_t frame = R32(ctx.ebx + kItemFrame);
     float anchor = kCentre;

@@ -714,8 +714,9 @@ bool ButtonShown(size_t i) {
     if (g_layout[i].hidden) return false;
     if (b.when == When::Game) return !InMenus();
     if (b.when == When::Menus) return InMenus();
-    // in play only while the player has the controls: none over a loading screen or a cutscene
-    return !InMenus() && input::Play();
+    // in play only while the player has the controls: none over a loading screen or a cutscene. A hint's pause stops
+    // the look but waits for a button (reload, health pack), so the HUD still drawing keeps them up
+    return !InMenus() && (input::Play() || game::HudShown());
 }
 
 void Centre(size_t i, float& cx, float& cy) {
