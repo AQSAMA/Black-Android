@@ -9,6 +9,7 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
+import android.widget.Toast;
 
 import java.io.File;
 
@@ -28,6 +29,7 @@ public class BlackActivity extends SDLActivity {
     private UpdateChecker.Release update;  // a newer release not shown yet
     private final GameImporter importer = new GameImporter(this);
     private boolean importing;  // the file picker or the copy is up: nothing else is asked meanwhile
+    private boolean checking;   // a check asked from the menu is under way
 
     @Override
     protected String[] getLibraries() {
@@ -39,9 +41,36 @@ public class BlackActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
         File own = getExternalFilesDir(null);
         if (own != null) new File(own, "assets").mkdirs();
-        UpdateChecker.check(this, r -> {
+        // every launch: a newer release is shown once nothing else is asked
+        UpdateChecker.check(this, false, (r, failed) -> {
+            if (r == null) return;
             update = r;
             tellOfUpdate();
+        });
+    }
+
+    // CHECK FOR UPDATES in the options menu, from the game's thread: the answer always shows, up to date or offline
+    public void checkForUpdates() {
+        runOnUiThread(() -> {
+            if (checking) return;
+            checking = true;
+            Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show();
+            UpdateChecker.check(this, true, (r, failed) -> {
+                checking = false;
+                if (r != null) {
+                    update = r;
+                    tellOfUpdate();
+                    return;
+                }
+                if (isFinishing() || (dialog != null && dialog.isShowing())) return;
+                String msg = failed ? "Couldn't reach GitHub. Check your internet connection and try again."
+                                    : "You have the latest version (" + UpdateChecker.installedVersion(this) + ").";
+                dialog = new AlertDialog.Builder(this)
+                        .setTitle(failed ? "Update check failed" : "No update")
+                        .setMessage(msg)
+                        .setPositiveButton("OK", null)
+                        .show();
+            });
         });
     }
 

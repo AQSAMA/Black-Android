@@ -16,17 +16,16 @@ import java.nio.charset.StandardCharsets;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-// Asks GitHub for the newest release of this app, at most every few hours and off the main thread, and hands it
-// over when it is newer than the one installed and the player has not skipped it.
+// Asks GitHub for the newest release of this app, off the main thread: at each launch, handing it over when it is
+// newer than the one installed and the player has not skipped it, and from the options menu, where the answer is
+// given whatever it is.
 final class UpdateChecker {
     static final String REPO = "RanggaCasper/Black-Android";
     private static final String LATEST = "https://api.github.com/repos/" + REPO + "/releases/latest";
     private static final String TAG = "BlackUpdate";
-    private static final long CHECK_EVERY_MS = 12L * 60 * 60 * 1000;
     private static final int TIMEOUT_MS = 8000;
 
     private static final String PREFS = "updates";
-    private static final String LAST_CHECK = "last_check";
     private static final String SKIPPED = "skipped_tag";
 
     static final class Release {
@@ -38,29 +37,35 @@ final class UpdateChecker {
     }
 
     interface Listener {
-        void onUpdate(Release r);
+        // the newer release or null; failed when GitHub could not be asked
+        void onResult(Release newer, boolean failed);
     }
 
     private UpdateChecker() {}
 
-    static void check(Context context, Listener listener) {
+    // manual: asked from the menu, a skipped release counts too; the listener runs on the main thread
+    static void check(Context context, boolean manual, Listener listener) {
         Context app = context.getApplicationContext();
         SharedPreferences prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        long now = System.currentTimeMillis();
-        if (now - prefs.getLong(LAST_CHECK, 0) < CHECK_EVERY_MS) return;
         String installed = installedVersion(app);
         Handler main = new Handler(Looper.getMainLooper());
         new Thread(() -> {
+            Release newer = null;
+            boolean failed = false;
             try {
                 Release r = fetch();
-                prefs.edit().putLong(LAST_CHECK, now).apply();
-                if (r == null || r.tag.equals(prefs.getString(SKIPPED, null))) return;
-                if (compare(r.tag, installed) <= 0) return;
-                Log.i(TAG, "update " + r.tag + " over " + installed);
-                main.post(() -> listener.onUpdate(r));
+                boolean skipped = r != null && !manual && r.tag.equals(prefs.getString(SKIPPED, null));
+                if (r != null && !skipped && compare(r.tag, installed) > 0) {
+                    Log.i(TAG, "update " + r.tag + " over " + installed);
+                    newer = r;
+                }
             } catch (Exception e) {
                 Log.w(TAG, "no update check: " + e);  // offline, rate limited: try again next launch
+                failed = true;
             }
+            Release found = newer;
+            boolean f = failed;
+            main.post(() -> listener.onResult(found, f));
         }, "UpdateCheck").start();
     }
 
@@ -69,7 +74,7 @@ final class UpdateChecker {
                 .edit().putString(SKIPPED, tag).apply();
     }
 
-    private static String installedVersion(Context app) {
+    static String installedVersion(Context app) {
         try {
             return app.getPackageManager().getPackageInfo(app.getPackageName(), 0).versionName;
         } catch (PackageManager.NameNotFoundException e) {

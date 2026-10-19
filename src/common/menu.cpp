@@ -43,6 +43,11 @@ void StepSize(int step);
 void EditLayout();
 }  // namespace touch
 
+// native/update.cpp: the activity asks GitHub for a newer release and says what it found
+namespace host {
+void CheckForUpdates();
+}  // namespace host
+
 namespace app {
 
 namespace {
@@ -219,7 +224,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
-             kUnlockLevels };
+             kUnlockLevels, kCheckUpdates };
 
 using rows::Kind;
 using rows::Row;
@@ -241,6 +246,7 @@ constexpr Row kSettingsRows[] = {
     {Kind::Value, kSkipIntros, "SKIP INTROS"},
     {Kind::Value, kLanguage, "LANGUAGE"},
     {Kind::Value, kAudioOutput, "AUDIO OUTPUT"},
+    {Kind::Value, kCheckUpdates, "CHECK FOR UPDATES"},
     {Kind::Heading, -1, "TOUCH"},
     {Kind::Value, kTouchLayout, "CONTROLS LAYOUT"},
     {Kind::Value, kTouchOpacity, "CONTROLS OPACITY"},
@@ -422,6 +428,11 @@ void StepInputRow(int id, int step, char (&text)[64]) {
             // any step opens the editor over the screen
             if (step) touch::EditLayout();
             std::snprintf(text, sizeof(text), "OPEN");
+            break;
+        case kCheckUpdates:
+            // any step asks; the answer comes in a dialog over the game
+            if (step) host::CheckForUpdates();
+            std::snprintf(text, sizeof(text), "CHECK");
             break;
         case kGyroSensitivity:
             // 0.1 to 5.0 in steps of 0.1
@@ -766,7 +777,7 @@ void rows::Defaults(int page) { RestoreDefaults(page); }
 
 bool rows::Enabled(const Row&) { return true; }
 
-bool rows::Opens(const Row& row) { return row.kind == Kind::Value && row.id == kTouchEdit; }
+bool rows::Opens(const Row& row) { return row.kind == Kind::Value && (row.id == kTouchEdit || row.id == kCheckUpdates); }
 
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 

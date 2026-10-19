@@ -95,6 +95,8 @@ constexpr Entry kEntries[] = {
     {"ALWAYS", {{}, {}, {}, {}, u"Selalu"}},
     {"WHILE FIRING", {{}, {}, {}, {}, u"Saat menembak"}},
     {"OPEN", {{}, {}, {}, {}, u"Buka"}},
+    {"CHECK FOR UPDATES", {u"Rechercher des mises à jour", u"Nach Updates suchen", u"Cerca aggiornamenti", u"Buscar actualizaciones", u"Cek pembaruan"}},
+    {"CHECK", {u"Rechercher", u"Suchen", u"Cerca", u"Buscar", u"Cek"}},
     {"CUSTOM", {{}, {}, {}, {}, u"Kustom"}},
     {"DEFAULT", {{}, {}, {}, {}, u"Bawaan"}},
     {"3 FINGER", {{}, {}, {}, {}, u"3 jari"}},
