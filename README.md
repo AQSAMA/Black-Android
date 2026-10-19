@@ -8,8 +8,8 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
 
 ## Installation
 1. Install the APK.
-2. Open **Black Android** and allow **all files access** when it asks.
-3. Copy the game into `/storage/emulated/0/Black`: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder once access is allowed, and starts the game as soon as it finds the files.
+2. Open **Black Android** and allow **all files access** when it asks (on Android 10, the **storage** permission).
+3. Copy the game into `/storage/emulated/0/Black`, or into a `Black` folder at the top of your SD card: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder on the phone's storage once access is allowed, and starts the game as soon as it finds the files.
 
 If you don't grant that access, `Android/data/com.racas.black/files/assets` works too.
 
@@ -25,8 +25,8 @@ The settings are in the game's own options menu, each page under its own button:
   - **Viewmodel Field of View**: FOV of the first-person weapon and arms.
   - **FMV Scale**: *Fill* zooms the 4:3 videos to fill the screen; *4:3* keeps their original aspect ratio.
 - **Performance**
-  - **V-Sync**.
-  - **Max Frame Rate**: caps the frame rate at the display's refresh rate or a custom value, or removes the cap. This replaces the Xbox's 30 FPS limit.
+  - **V-Sync**, off by default.
+  - **Max Frame Rate**: unlimited by default, or capped at the display's refresh rate or a custom value. This replaces the Xbox's 30 FPS limit.
   - **FPS Counter**.
 - **Quality**
   - **Anisotropic Filtering**, applied to all textures.
@@ -34,7 +34,8 @@ The settings are in the game's own options menu, each page under its own button:
   - **Reload Blur**: turns the blur while reloading on or off.
 
 ### Touch Controls
-- **Touch**: the left side of the screen is a movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing.
+- **Touch**: the left side of the screen is a movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing. The controls hide over loading screens and cutscenes.
+- **Menus**: a D-pad and a back button move through the menus and the options; tap an arrow to step one row, or hold it to keep going.
 - **Touch Sensitivity**: how fast a drag turns the view, separate from the mouse's sensitivity.
 - **Controls Layout**: pick a preset (*Default*, *3 Finger* or *4 Finger*) and set the controls' opacity and overall size.
 - **Edit Controls Position**: drag each control where you want it. To resize one, select it and tap **−** or **+**, or pinch it with a second finger.
@@ -57,7 +58,7 @@ The settings are in the game's own options menu, each page under its own button:
 - **Game**: game speed from 25% to 200%.
 
 ## System Requirements
-- **Android** 11 or newer, arm64.
+- **Android** 10 or newer, arm64.
 - **GPU** with a Vulkan 1.1 driver, for example Adreno 6xx or newer, Mali-G7x or newer, or Xclipse. Drivers without dynamic rendering or timeline semaphores are supported.
 - **Memory**: 4 GB.
 - **Storage**: 2 GB for the game files and saves.

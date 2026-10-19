@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Android-11%2B-3DDC84?logo=android&logoColor=white" alt="Android 11+">
+  <img src="https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white" alt="Android 10+">
   <img src="https://img.shields.io/badge/arch-arm64--v8a-blue" alt="arm64-v8a">
   <img src="https://img.shields.io/badge/Vulkan-1.1-AC162C?logo=vulkan&logoColor=white" alt="Vulkan 1.1">
   <img src="https://img.shields.io/badge/SDL-3-1D4F91" alt="SDL3">
@@ -29,7 +29,7 @@
 
 1. Install **`{{APK}}`** on your phone.
 2. Open **Black Android** and allow **all files access** when it asks.
-3. Copy the game into **`/storage/emulated/0/Black`**: the disc image (`.iso`), or `default.xbe` with its data folders.
+3. Copy the game into **`/storage/emulated/0/Black`**, or into a `Black` folder on your SD card: the disc image (`.iso`), or `default.xbe` with its data folders.
 4. The game starts as soon as it finds the files.
 
 > [!TIP]
@@ -49,7 +49,7 @@ The settings are in the game's own options menu, one page per group. Android's b
 
 ## 📱 Requirements
 
-- **Android** 11 or newer, arm64
+- **Android** 10 or newer, arm64
 - **GPU** with a Vulkan 1.1 driver (Adreno 6xx+, Mali-G7x+, Xclipse)
 - **4 GB** RAM, **2 GB** free storage
 

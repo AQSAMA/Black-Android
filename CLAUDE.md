@@ -46,7 +46,7 @@ The root `CMakeLists.txt` builds one shared library, `libmain.so`, which SDL's a
   - `src/sound/`: DirectSound reimplemented (buffers, streams, ADPCM decode, mixer, reverb).
   - `src/common/`: `game_info.cpp` defines `app::kGame`, the struct that describes the game to the runtime (title, settings file, option bindings, load/save/init, pad and rumble filters, UI callback). Also here: the in-game options menu (`menu.cpp`), `options.h` (`game::Options`, saved to `black.toml`), translations, and `europe.patch` (see below).
 - **`native/`**, the Android host. `main.cpp` runs SDL's window and event loop, the app lifecycle and foreground/surface handling. `vulkan.cpp` is the Vulkan backend, and `vk_shader.cpp` compiles the SDK's HLSL shader translations to SPIR-V with glslang. The rest: `touch.cpp` (touch controls and layout editor, plus keyboard and mouse), `gyro.cpp`, `input.cpp` (controllers), `audio.cpp`, `ui.cpp` (ImGui), and `game_files.cpp`, which finds the game files or ISO and checks the xbe's SHA1 against `kImageSha1`. `host.h` declares the interfaces these parts share. `native/compat/crt.h` is force-included into all host sources (not the generated ones).
-- **`app/`**: Gradle module. `BlackActivity.java` extends `SDLActivity`. It asks for all-files access and creates `/storage/emulated/0/Black` and `files/assets`, which are where the game files are looked for. `UpdateChecker.java` calls the GitHub API (`/releases/latest`) at launch, at most every 12 hours. If that tag is newer than the installed `versionName`, it shows an update dialog listing the changes from the release body's `## What's Changed` section, which CI fills from the commit subjects since the previous tag.
+- **`app/`**: Gradle module. `BlackActivity.java` extends `SDLActivity`. It asks for all-files access (the storage permission on Android 10) and creates `/storage/emulated/0/Black` and `files/assets`, which are where the game files are looked for, along with a `Black` folder at the top of each SD card. `UpdateChecker.java` calls the GitHub API (`/releases/latest`) at every launch, and from the options' Check for Updates. If that tag is newer than the installed `versionName`, it shows an update dialog listing the changes from the release body's `## What's Changed` section, which CI fills from the commit subjects since the previous tag.
 
 ### How recompiled code reaches the host
 
@@ -65,5 +65,5 @@ The build is recompiled from the **USA** `default.xbe`. At runtime a Europe xbe 
 ## Conventions
 
 - Native code is C++20 and is compiled with `-fsigned-char -fno-strict-aliasing`, matching x86 semantics.
-- Only arm64-v8a is built, minSdk 30. Libraries are linked with 16 KB page alignment.
+- Only arm64-v8a is built, minSdk 29 (`native/compat/crt.h` supplies `memfd_create`, which bionic has from API 30). Libraries are linked with 16 KB page alignment.
 - Comment style is terse, lowercase, and explains *why*, as in the existing files.
