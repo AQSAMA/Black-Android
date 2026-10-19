@@ -6,6 +6,14 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
 > [!NOTE]
 > This project does not include any game assets. You must provide the files from your own legally acquired copy of the game to install or build.
 
+<p align="center">
+  <a href="https://youtu.be/x5bczwTuyhw">
+    <img src="https://img.youtube.com/vi/x5bczwTuyhw/maxresdefault.jpg" alt="Black Android gameplay on POCO F6" width="720">
+  </a>
+  <br>
+  <sub>▶ Gameplay on POCO F6, max settings + gyro aim</sub>
+</p>
+
 ## Installation
 1. Install the APK.
 2. Open **Black Android** and allow **all files access** when it asks (on Android 10, the **storage** permission).
