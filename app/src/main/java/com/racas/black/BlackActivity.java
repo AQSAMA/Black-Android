@@ -7,6 +7,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.view.InputDevice;
+import android.view.InputEvent;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -16,6 +19,7 @@ import android.widget.Toast;
 import java.io.File;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLControllerManager;
 
 // SDL's activity running libmain.so. The game goes in the Black folder on the phone's storage
 // (/storage/emulated/0/Black). Reading it needs all files access, a special access Android grants on a settings page
@@ -51,6 +55,44 @@ public class BlackActivity extends SDLActivity {
             update = r;
             tellOfUpdate();
         });
+    }
+
+    // A controller some phones' game services pass on as a virtual device (MIUI's took a DualShock 4 on a Redmi Note
+    // 8 Pro): SDL sees no controller in it and drops its input. Its buttons and sticks go to the game as port 0's
+    // here (native/input.cpp); a controller SDL has goes its own way as before.
+    private static native void nativeLooseKey(int keyCode, boolean down);
+    private static native void nativeLooseAxes(float lx, float ly, float rx, float ry, float lt, float rt, float hx,
+                                               float hy);
+    private static native void nativeLooseRelease();
+
+    private static boolean loose(InputEvent e, int sources) {
+        return !mBrokenLibraries && (e.getSource() & sources) != 0
+                && !SDLControllerManager.isDeviceSDLJoystick(e.getDeviceId());
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        boolean pad = KeyEvent.isGamepadButton(e.getKeyCode()) || (e.getKeyCode() >= KeyEvent.KEYCODE_DPAD_UP
+                && e.getKeyCode() <= KeyEvent.KEYCODE_DPAD_RIGHT);
+        if (pad && loose(e, InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) {
+            if (e.getRepeatCount() == 0) nativeLooseKey(e.getKeyCode(), e.getAction() == KeyEvent.ACTION_DOWN);
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent e) {
+        if (loose(e, InputDevice.SOURCE_JOYSTICK) && e.getActionMasked() == MotionEvent.ACTION_MOVE) {
+            // the right stick on Z and RZ, the triggers on LTRIGGER and RTRIGGER or BRAKE and GAS, as Android has them
+            nativeLooseAxes(e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y),
+                    e.getAxisValue(MotionEvent.AXIS_Z), e.getAxisValue(MotionEvent.AXIS_RZ),
+                    Math.max(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)),
+                    Math.max(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)),
+                    e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y));
+            return true;
+        }
+        return super.dispatchGenericMotionEvent(e);
     }
 
     // The mouse while the game holds it (SDL's relative mode, Android's pointer capture). SDL's own handler passes on
@@ -125,6 +167,7 @@ public class BlackActivity extends SDLActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemBars();
+        else if (!mBrokenLibraries) nativeLooseRelease();  // its ups go elsewhere while the game is not in front
     }
 
     private void hideSystemBars() {
