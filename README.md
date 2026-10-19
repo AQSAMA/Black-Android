@@ -38,11 +38,11 @@ The settings are in the game's own options menu, each page under its own button:
 - **Touch Sensitivity**: how fast a drag turns the view, separate from the mouse's sensitivity.
 - **Controls Layout**: pick a preset (*Default*, *3 Finger* or *4 Finger*) and set the controls' opacity and overall size.
 - **Edit Controls Position**: drag each control where you want it. To resize one, select it and tap **−** or **+**, or pinch it with a second finger.
-- **Motion Controls**: aim with the gyroscope by turning the phone, either always or only while firing, with adjustable sensitivity.
+- **Motion Controls**: aim with the gyroscope by turning the phone, or a DualShock 4 or DualSense on Android 12 and newer, either always or only while firing, with adjustable sensitivity. The controller's gyroscope is used while you play with the controller, the phone's while you use the touch screen.
 
 ### Other Input
-- **Controller**: any controller SDL3 supports, with rumble. The touch buttons hide while a controller is in use.
-- **Keyboard and Mouse**, with rebindable controls, mouse sensitivity and invert look.
+- **Controller**: any controller SDL3 supports, with rumble. The touch buttons hide while a controller is in use. Controllers that some phones pass on as a virtual device (a DualShock 4 on MIUI, for example) work too.
+- **Keyboard and Mouse**, with rebindable controls, mouse sensitivity and invert look. In play the mouse is captured as on a PC: no pointer on the screen, and the view keeps turning past the screen's edge.
 
 ### General
 - **Language**: English, French, German, Italian or Spanish where the disc has them, plus Indonesian for the port's own text.

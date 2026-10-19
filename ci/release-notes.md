@@ -40,8 +40,8 @@
 | | |
 | --- | --- |
 | 🖥️ **Graphics** | Render resolution 20–200%, FOV 45–140°, viewmodel FOV, FMV scale, unlocked frame rate, V-Sync, FPS counter, anisotropic filtering, 2x / 4x / 8x draw distance, toggleable reload blur |
-| 👆 **Touch Controls** | Presets and a layout editor to move and resize each control, touch sensitivity, gyroscope aiming |
-| 🎮 **Other Input** | SDL3 controllers with rumble, keyboard and mouse with rebindable controls |
+| 👆 **Touch Controls** | Presets and a layout editor to move and resize each control, touch sensitivity, gyroscope aiming with the phone or a DualShock 4 / DualSense |
+| 🎮 **Other Input** | SDL3 controllers with rumble, keyboard and a captured mouse with rebindable controls |
 | ⚙️ **General** | Language (with Indonesian), skip intros, audio output, update check, pause while in the background |
 | 💀 **Cheats** | Infinite ammo and grenades, rapid fire, no recoil, god mode, one-hit kills, game speed |
 
