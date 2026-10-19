@@ -502,7 +502,7 @@ namespace {
 using input::NowMs;
 
 // what a finger on the screen does
-enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag };
+enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag, Pinch };
 
 // a control of the touch layout: what it shows and presses, on the controller (analog 0-7, button bits from 8) or on
 // the host. Where it sits is the layout's, which the player edits and picks presets for
@@ -705,17 +705,26 @@ void Centre(size_t i, float& cx, float& cy) {
 
 float Radius(size_t i) { return g_layout[i].r * g_scale * Height(); }
 
-// the editor's bar at the top: Reset, Cancel, Done, in screen shares
-constexpr const char* kBarLabels[] = {"RESET", "CANCEL", "DONE"};
+// the editor's bar at the top: Reset, smaller and bigger for the picked control, Cancel, Done, in screen shares
+constexpr const char* kBarLabels[] = {"RESET", "-", "+", "CANCEL", "DONE"};
+enum { kBarReset, kBarSmaller, kBarBigger, kBarCancel, kBarDone, kBarCount };
 constexpr float kBarY = 0.17f, kBarH = 0.09f, kBarW = 0.13f, kBarGap = 0.02f;
+constexpr float kBarSizeW = 0.07f;                       // the - and + buttons
+constexpr float kMinRadius = 0.02f, kMaxRadius = 0.25f;  // a control's own radius, in screen heights
+constexpr float kSizeStep = 1.1f;                        // a tap on - or +
+
+float BarWidth(int i) { return i == kBarSmaller || i == kBarBigger ? kBarSizeW : kBarW; }
 
 // the bar's button under a point, -1 for none
 int BarAt(float x, float y, float rect[4] = nullptr, int which = -1) {
     float w = Width(), h = Height();
-    float total = 3 * kBarW + 2 * kBarGap;
-    for (int i = 0; i < 3; i++) {
-        float x0 = (0.5f - total / 2 + float(i) * (kBarW + kBarGap)) * w, y0 = kBarY * h;
-        float x1 = x0 + kBarW * w, y1 = y0 + kBarH * h;
+    float total = (kBarCount - 1) * kBarGap;
+    for (int i = 0; i < kBarCount; i++) total += BarWidth(i);
+    float left = 0.5f - total / 2;
+    for (int i = 0; i < kBarCount; i++) {
+        float x0 = left * w, y0 = kBarY * h;
+        float x1 = x0 + BarWidth(i) * w, y1 = y0 + kBarH * h;
+        left += BarWidth(i) + kBarGap;
         if (i == which && rect) {
             rect[0] = x0, rect[1] = y0, rect[2] = x1, rect[3] = y1;
             return i;
@@ -777,21 +786,40 @@ void Recount() {
     if (!stick) g_stick_x = g_stick_y = 0;
 }
 
-// the editor: a touch on the bar resets, cancels or saves; on a control picks it up to move it, anywhere else lets go
-// of the pick
+void Resize(size_t i, float r) { g_layout[i].r = std::clamp(r, kMinRadius, kMaxRadius); }
+
+// the editor: a touch on the bar resets, resizes the picked control, cancels or saves; a second finger while one
+// drags a control pinches it bigger or smaller; on a control picks it up to move it, anywhere else lets go of the pick
 void EditDown(Finger& f, float x, float y) {
-    switch (BarAt(x, y)) {
-        case 0:
+    int bar = BarAt(x, y);
+    switch (bar) {
+        case kBarReset:
             ApplyPreset(g_preset);
             return;
-        case 1:
+        case kBarSmaller:
+        case kBarBigger:
+            if (g_selected >= 0) {
+                float r = g_layout[size_t(g_selected)].r;
+                Resize(size_t(g_selected), bar == kBarBigger ? r * kSizeStep : r / kSizeStep);
+            }
+            return;
+        case kBarCancel:
             CloseEditor(false);
             return;
-        case 2:
+        case kBarDone:
             CloseEditor(true);
             return;
         default:
             break;
+    }
+    for (const Finger& d : g_fingers) {
+        if (d.role != Role::Drag) continue;
+        // the span between the fingers and the control's size as the pinch began
+        f.role = Role::Pinch;
+        f.button = d.button;
+        f.x0 = std::max(std::hypot(x - d.x, y - d.y), 1.0f);
+        f.y0 = g_layout[d.button].r;
+        return;
     }
     size_t b = HitButton(x, y);
     float sx = g_layout[kStick].x * Width(), sy = g_layout[kStick].y * Height(), sr = Radius(kStick);
@@ -893,6 +921,15 @@ void FingerMove(SDL_FingerID id, float x, float y) {
             Place& p = g_layout[f.button];
             p.x = std::clamp((x - f.x0) / Width(), 0.0f, 1.0f);
             p.y = std::clamp((y - f.y0) / Height(), 0.0f, 1.0f);
+        }
+        // a pinch sizes the control by the span between its two fingers, whichever moved
+        if (f.role == Role::Drag || f.role == Role::Pinch) {
+            for (const Finger& o : g_fingers) {
+                const Finger& pinch = f.role == Role::Pinch ? f : o;
+                const Finger& drag = f.role == Role::Pinch ? o : f;
+                if (&o == &f || pinch.role != Role::Pinch || drag.role != Role::Drag || pinch.button != drag.button) continue;
+                Resize(f.button, pinch.y0 * std::hypot(pinch.x - drag.x, pinch.y - drag.y) / pinch.x0);
+            }
         }
         if (f.role == Role::Stick) UpdateStick(f);
         if (f.role == Role::Look || (f.role == Role::Button && kButtons[f.button].look)) {
@@ -1245,18 +1282,20 @@ void CentredText(ImDrawList* dl, ImVec2 at, float size, ImU32 colour, const char
 // the editor's bar, drawn as the controls are: Reset, Cancel, Done, and what to do under it
 void DrawEditorBar(ImDrawList* dl, float th) {
     float h = Height();
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < kBarCount; i++) {
         float r[4];
         BarAt(0, 0, r, i);
-        bool done = i == 2;
+        bool done = i == kBarDone;
+        bool size = i == kBarSmaller || i == kBarBigger;
+        int alpha = size && g_selected < 0 ? 90 : 240;  // - and + wait for a control to be picked
         dl->AddRectFilled(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]),
                           done ? IM_COL32(150, 115, 45, 235) : IM_COL32(20, 18, 14, 225), h * 0.015f);
-        dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, 230), h * 0.015f, 0, th * 0.7f);
-        CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * 0.042f, IM_COL32(255, 255, 255, 240),
-                    app::Ui(kBarLabels[i]).c_str());
+        dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, alpha), h * 0.015f, 0, th * 0.7f);
+        CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * (size ? 0.06f : 0.042f),
+                    IM_COL32(255, 255, 255, alpha), app::Ui(kBarLabels[i]).c_str());
     }
     CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.05f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
-                app::Ui("DRAG A CONTROL TO MOVE IT").c_str());
+                app::Ui("DRAG TO MOVE, PINCH OR - + TO RESIZE").c_str());
 }
 
 }  // namespace
