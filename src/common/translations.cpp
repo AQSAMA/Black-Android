@@ -75,7 +75,6 @@ constexpr Entry kEntries[] = {
     {"GOD MODE", {u"Invincibilité", u"Unverwundbarkeit", u"Invincibilità", u"Invencibilidad", u"Mode dewa"}},
     {"ONE-HIT KILL", {u"Mort en un coup", u"Ein-Treffer-Kill", u"Uccisione con un colpo", u"Muerte de un golpe", u"Sekali tembak mati"}},
     {"GAME SPEED", {u"Vitesse du jeu", u"Spielgeschwindigkeit", u"Velocità di gioco", u"Velocidad del juego", u"Kecepatan game"}},
-    {"UNLOCK ALL LEVELS", {u"Débloquer tous les niveaux", u"Alle Level freischalten", u"Sblocca tutti i livelli", u"Desbloquear todos los niveles", u"Buka semua level"}},
 
     // their values
     {"FULLSCREEN", {u"Plein écran", u"Vollbild", u"Schermo intero", u"Pantalla completa", u"Layar penuh"}},

@@ -224,7 +224,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
-             kUnlockLevels, kCheckUpdates, kTouchSensitivity };
+             kCheckUpdates, kTouchSensitivity };
 
 using rows::Kind;
 using rows::Row;
@@ -279,7 +279,6 @@ constexpr Row kCheatRows[] = {
     {Kind::Value, kOneHitKill, "ONE-HIT KILL"},
     {Kind::Heading, -1, "GAME"},
     {Kind::Value, kGameSpeed, "GAME SPEED"},
-    {Kind::Value, kUnlockLevels, "UNLOCK ALL LEVELS"},
 };
 
 const std::vector<Row>& InputRows() {
@@ -313,7 +312,6 @@ bool* ToggleFlag(Settings& s, int id) {
         case kGodMode: return &o.god_mode;
         case kOneHitKill: return &o.one_hit_kill;
         case kInfiniteGrenades: return &o.infinite_grenades;
-        case kUnlockLevels: return &o.unlock_levels;
         default: return nullptr;
     }
 }
@@ -518,7 +516,6 @@ void RestoreDefaults(int page) {
         o.god_mode = none.god_mode;
         o.one_hit_kill = none.one_hit_kill;
         o.infinite_grenades = none.infinite_grenades;
-        o.unlock_levels = none.unlock_levels;
         Changed();
         return;
     }
@@ -546,7 +543,6 @@ void RestoreDefaults(int page) {
     o.god_mode = keep.god_mode;
     o.one_hit_kill = keep.one_hit_kill;
     o.infinite_grenades = keep.infinite_grenades;
-    o.unlock_levels = keep.unlock_levels;
     Changed();
 }
 

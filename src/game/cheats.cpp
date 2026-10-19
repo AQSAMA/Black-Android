@@ -1,4 +1,4 @@
-// The cheats page's god mode, one-hit kill, infinite grenades and level unlock. The rest live where the game
+// The cheats page's god mode, one-hit kill and infinite grenades. The rest live where the game
 // already has a hook: infinite ammo, rapid fire and no recoil with the weapon's, game speed with the frame time
 #include <algorithm>
 
@@ -24,10 +24,6 @@ constexpr uint32_t kPlayerKind = 2;
 constexpr uint32_t kDifficulty = 0x2014C;  // in the game object, 0 easy to 3 black ops
 // full health, as 0x13F10 scales 1.0: easy and normal, then hard and black ops
 constexpr float kFullHealth[] = {1200.0f, 750.0f};
-
-// level select: FELevelUnlocked1..8 read these, 0 locked, 1 open, 2 the one to play next (0x115030)
-constexpr uint32_t kLevelFlags = 0x2EC4A4;
-constexpr uint32_t kLevels = 8;
 
 uint32_t Player() { return R32(kWorld) ? R32(kWorld) + kWorldPlayer : 0; }
 
@@ -100,13 +96,4 @@ X86_FUNC(sub_001E8830) {
     uint16_t grenades = keep ? G<uint16_t>(me + kCharGrenades) : 0;
     __imp__sub_001E8830(ctx, base);
     if (keep && G<uint16_t>(me + kCharGrenades) < grenades) G<uint16_t>(me + kCharGrenades) = grenades;
-}
-
-// The level select's flags from the save: the cheat opens the locked ones, the one to play next stays marked
-X86_EXTERN_FUNC(__imp__sub_00115030);
-X86_FUNC(sub_00115030) {
-    __imp__sub_00115030(ctx, base);
-    if (!game::Opt().unlock_levels) return;
-    for (uint32_t i = 0; i < kLevels; i++)
-        if (!R32(kLevelFlags + i * 4)) W32(kLevelFlags + i * 4, 1);
 }

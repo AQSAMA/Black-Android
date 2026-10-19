@@ -33,7 +33,6 @@ struct Options {
     bool god_mode = false;  // cheat: no hit takes the player's health
     bool one_hit_kill = false;  // cheat: any hit of the player's bullets kills
     bool infinite_grenades = false;  // cheat: throwing a grenade keeps the count
-    bool unlock_levels = false;  // cheat: the level select offers every level, the save is left as it is
     std::map<std::string, std::string> keys;  // action id to key names, absent is the default
 };
 Options& Opt();
