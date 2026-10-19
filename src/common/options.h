@@ -18,6 +18,7 @@ struct Options {
     bool reload_blur = true;
     uint32_t draw_distance = 1;  // times the game's LOD and draw distances
     float mouse_sensitivity = 1.0f;
+    float touch_sensitivity = 1.0f;  // the touch screen's look, apart from the mouse's
     bool invert_mouse = false;
     bool hold_aim = true;  // scopes too, keyboard and mouse
     uint32_t fov = 70;  // horizontal degrees on a 4:3 frame, 70 is the game's

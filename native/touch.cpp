@@ -40,6 +40,8 @@ namespace {
 
 std::atomic<int> g_dx{0};
 std::atomic<int> g_dy{0};
+std::atomic<int> g_touch_dx{0};  // the touch screen's look, scaled by its own sensitivity
+std::atomic<int> g_touch_dy{0};
 std::atomic<uint64_t> g_take_ms{0};     // TakeMouse, asked every tick in play
 std::atomic<uint64_t> g_capture_ms{0};  // PressedKey
 std::atomic<bool> g_settle{false};
@@ -323,12 +325,13 @@ void ReleaseCursor() { g_settle = true; }
 bool TakeMouse(float& dx, float& dy) {
     uint64_t now = NowMs();
     bool stale = now - g_take_ms.exchange(now) >= kPlayMs;
-    int x = g_dx.exchange(0);
-    int y = g_dy.exchange(0);
-    if ((!x && !y) || stale || !Active()) return false;
+    int x = g_dx.exchange(0), tx = g_touch_dx.exchange(0);
+    int y = g_dy.exchange(0), ty = g_touch_dy.exchange(0);
+    if ((!x && !y && !tx && !ty) || stale || !Active()) return false;
     const game::Options& o = game::Opt();
-    dx = float(x) * o.mouse_sensitivity;
-    dy = float(o.invert_mouse ? -y : y) * o.mouse_sensitivity;
+    dx = float(x) * o.mouse_sensitivity + float(tx) * o.touch_sensitivity;
+    dy = float(y) * o.mouse_sensitivity + float(ty) * o.touch_sensitivity;
+    if (o.invert_mouse) dy = -dy;
     return true;
 }
 
@@ -934,8 +937,8 @@ void FingerMove(SDL_FingerID id, float x, float y) {
         if (f.role == Role::Stick) UpdateStick(f);
         if (f.role == Role::Look || (f.role == Role::Button && kButtons[f.button].look)) {
             float k = kLookCounts / Width();
-            input::g_dx += int(std::lround(dx * k));
-            input::g_dy += int(std::lround(dy * k));
+            input::g_touch_dx += int(std::lround(dx * k));
+            input::g_touch_dy += int(std::lround(dy * k));
         }
         if (f.role == Role::Cursor) MenuMove(f);
     }

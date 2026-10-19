@@ -224,7 +224,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
-             kUnlockLevels, kCheckUpdates };
+             kUnlockLevels, kCheckUpdates, kTouchSensitivity };
 
 using rows::Kind;
 using rows::Row;
@@ -248,6 +248,7 @@ constexpr Row kGraphicsRows[] = {
 
 constexpr Row kTouchRows[] = {
     {Kind::Heading, -1, "TOUCH"},
+    {Kind::Value, kTouchSensitivity, "TOUCH SENSITIVITY"},
     {Kind::Value, kTouchLayout, "CONTROLS LAYOUT"},
     {Kind::Value, kTouchOpacity, "CONTROLS OPACITY"},
     {Kind::Value, kTouchSize, "CONTROLS SIZE"},
@@ -410,6 +411,14 @@ void StepInputRow(int id, int step, char (&text)[64]) {
                 o.mouse_sensitivity = float(tenths) / 10.0f;
             }
             std::snprintf(text, sizeof(text), "%.1f", o.mouse_sensitivity);
+            break;
+        case kTouchSensitivity:
+            // as the mouse's: 0.1 to 5.0 in steps of 0.1
+            if (step) {
+                int tenths = StepRange(int(std::lround(o.touch_sensitivity * 10.0f)), 1, 50, 1, step);
+                o.touch_sensitivity = float(tenths) / 10.0f;
+            }
+            std::snprintf(text, sizeof(text), "%.1f", o.touch_sensitivity);
             break;
         case kWalkSpeed:
             // 10% to 100% in steps of 5

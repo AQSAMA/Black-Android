@@ -29,6 +29,7 @@ constexpr Entry kEntries[] = {
     {"PRESS A KEY", {u"Appuyez sur une touche", u"Taste drücken", u"Premi un tasto", u"Pulsa una tecla", u"Tekan tombol"}},
     {"UNBOUND", {u"Non assigné", u"Nicht belegt", u"Non assegnato", u"Sin asignar", u"Belum diatur"}},
     {"TOUCH", {{}, {}, {}, {}, u"Sentuh"}},
+    {"TOUCH SENSITIVITY", {u"Sensibilité tactile", u"Touch-Empfindlichkeit", u"Sensibilità touch", u"Sensibilidad táctil", u"Sensitivitas sentuh"}},
     {"DRAG TO MOVE, PINCH OR - + TO RESIZE", {{}, {}, {}, {}, u"Seret untuk memindah, cubit atau - + untuk mengubah ukuran"}},
     {"QUALITY", {u"Qualité", u"Qualität", u"Qualità", u"Calidad", u"Kualitas"}},
     {"PERFORMANCE", {u"Performances", u"Leistung", u"Prestazioni", u"Rendimiento", u"Performa"}},
