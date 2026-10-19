@@ -39,17 +39,18 @@
 
 | | |
 | --- | --- |
-| 🖥️ **Display** | Render resolution 20–200%, FOV 45–140°, viewmodel FOV, unlocked frame rate, V-Sync, FPS counter, FMV scale |
-| 🎨 **Graphics** | Anisotropic filtering, 2x / 4x / 8x draw distance, toggleable reload blur |
-| 🎮 **Input** | Touch controls with a layout editor, gyroscope aiming, SDL3 controllers with rumble, keyboard and mouse |
-| ⚙️ **General** | Skip intro, pause while in the background |
+| 🖥️ **Graphics** | Render resolution 20–200%, FOV 45–140°, viewmodel FOV, FMV scale, unlocked frame rate, V-Sync, FPS counter, anisotropic filtering, 2x / 4x / 8x draw distance, toggleable reload blur |
+| 👆 **Touch Controls** | Presets and a layout editor to move and resize each control, touch sensitivity, gyroscope aiming |
+| 🎮 **Other Input** | SDL3 controllers with rumble, keyboard and mouse with rebindable controls |
+| ⚙️ **General** | Language (with Indonesian), skip intros, audio output, update check, pause while in the background |
+| 💀 **Cheats** | Infinite ammo and grenades, rapid fire, no recoil, god mode, one-hit kills, game speed |
 
-The settings are in the game's own options menu. Android's back button opens the pause menu.
+The settings are in the game's own options menu, one page per group. Android's back button opens the pause menu.
 
 ## 📱 Requirements
 
 - **Android** 11 or newer, arm64
-- **GPU** with a Vulkan 1.1 driver that supports dynamic rendering and timeline semaphores (Adreno 6xx+, Mali-G7x+, Xclipse)
+- **GPU** with a Vulkan 1.1 driver (Adreno 6xx+, Mali-G7x+, Xclipse)
 - **4 GB** RAM, **2 GB** free storage
 
 ## 🙏 Credits

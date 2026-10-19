@@ -16,35 +16,49 @@ If you don't grant that access, `Android/data/com.racas.black/files/assets` work
 Settings (`black.toml`, `android.toml`, `layout.toml`), saves (`hdd`), logs and the shader cache are stored in `Android/data/com.racas.black/files`.
 
 ## Features
-### Display
-- **Render Resolution**: 20% to 200% of the screen's height (67% by default), instead of the original 640x480.
-- **Field of View**: horizontal FOV from 45 to 140 degrees during gameplay. The game's default is 70.
-- **Viewmodel Field of View**: FOV of the first-person weapon and arms.
-- **Max Frame Rate**: caps the frame rate at the display's refresh rate or a custom value, or removes the cap. This replaces the Xbox's 30 FPS limit.
-- **V-Sync** and an **FPS Counter**.
-- **FMV Scale**: *Fill* zooms the 4:3 videos to fill the screen; *4:3* keeps their original aspect ratio.
+The settings are in the game's own options menu, each page under its own button: **Graphics**, **Touch Controls**, **General**, **Mouse and Keyboard** and **Cheats**. Within a page the settings are grouped under headings, and arrows above and below the list show there is more to scroll to; tap them to move the list one row. In the pause menu, the *Page* row switches between the pages. Android's back button opens the pause menu.
 
 ### Graphics
-- **Anisotropic Filtering**, applied to all textures.
-- **Draw Distance**: 2x, 4x or 8x the game's level of detail and draw distances.
-- **Reload Blur**: turns the blur while reloading on or off.
+- **Display**
+  - **Render Resolution**: 20% to 200% of the screen's height (67% by default), instead of the original 640x480.
+  - **Field of View**: horizontal FOV from 45 to 140 degrees during gameplay. The game's default is 70.
+  - **Viewmodel Field of View**: FOV of the first-person weapon and arms.
+  - **FMV Scale**: *Fill* zooms the 4:3 videos to fill the screen; *4:3* keeps their original aspect ratio.
+- **Performance**
+  - **V-Sync**.
+  - **Max Frame Rate**: caps the frame rate at the display's refresh rate or a custom value, or removes the cap. This replaces the Xbox's 30 FPS limit.
+  - **FPS Counter**.
+- **Quality**
+  - **Anisotropic Filtering**, applied to all textures.
+  - **Draw Distance**: 2x, 4x or 8x the game's level of detail and draw distances.
+  - **Reload Blur**: turns the blur while reloading on or off.
 
-### Input
+### Touch Controls
 - **Touch**: the left side of the screen is a movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing.
-- **Controls Layout**: in the options menu under Recomp Settings: pick a preset (*Default*, *3 Finger* or *4 Finger*), set the controls' opacity and size, and drag each control where you want it with *Edit Controls Position*.
-- **Gyroscope**: aim by turning the phone, either always or only while firing, with adjustable sensitivity.
+- **Touch Sensitivity**: how fast a drag turns the view, separate from the mouse's sensitivity.
+- **Controls Layout**: pick a preset (*Default*, *3 Finger* or *4 Finger*) and set the controls' opacity and overall size.
+- **Edit Controls Position**: drag each control where you want it. To resize one, select it and tap **−** or **+**, or pinch it with a second finger.
+- **Motion Controls**: aim with the gyroscope by turning the phone, either always or only while firing, with adjustable sensitivity.
+
+### Other Input
 - **Controller**: any controller SDL3 supports, with rumble. The touch buttons hide while a controller is in use.
-- **Keyboard and Mouse**, with rebindable controls.
+- **Keyboard and Mouse**, with rebindable controls, mouse sensitivity and invert look.
 
 ### General
-- **Skip Intro** skips the intro logos.
+- **Language**: English, French, German, Italian or Spanish where the disc has them, plus Indonesian for the port's own text.
+- **Skip Intros** skips the intro logos.
+- **Audio Output**: automatic, mono, stereo or 5.1 surround.
+- **Check for Updates**: the app checks GitHub for a new release each time it opens. This button checks right away.
 - **Background Pause**: the game and its sound pause while the app is in the background.
 
-These settings are in the game's own options menu. Android's back button opens the pause menu.
+### Cheats
+- **Weapons**: infinite ammo, infinite grenades, rapid fire (2x to 4x) and no recoil.
+- **Player**: god mode and one-hit kills.
+- **Game**: game speed from 25% to 200%.
 
 ## System Requirements
 - **Android** 11 or newer, arm64.
-- **GPU** with a Vulkan 1.1 driver that supports dynamic rendering and timeline semaphores, for example Adreno 6xx or newer, Mali-G7x or newer, or Xclipse.
+- **GPU** with a Vulkan 1.1 driver, for example Adreno 6xx or newer, Mali-G7x or newer, or Xclipse. Drivers without dynamic rendering or timeline semaphores are supported.
 - **Memory**: 4 GB.
 - **Storage**: 2 GB for the game files and saves.
 

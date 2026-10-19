@@ -93,7 +93,7 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: My device meets the requirements (Android 11+, arm64, Vulkan 1.1 with dynamic rendering and timeline semaphores).
+        - label: My device meets the requirements (Android 11+, arm64, Vulkan 1.1).
           required: true
         - label: I searched the existing issues and this hasn't been reported yet.
           required: true
