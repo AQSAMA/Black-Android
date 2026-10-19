@@ -7,6 +7,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 
 import java.io.File;
 
@@ -55,6 +57,21 @@ public class BlackActivity extends SDLActivity {
     protected void onPause() {
         resumed = false;
         super.onPause();
+    }
+
+    // SDL's older immersive flags don't always come back after a dialog (MIUI on Android 11 kept the status bar):
+    // the bars are hidden again each time the game has the focus, a swipe shows them for a moment
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemBars();
+    }
+
+    private void hideSystemBars() {
+        WindowInsetsController c = getWindow().getInsetsController();
+        if (c == null) return;
+        c.hide(WindowInsets.Type.systemBars());
+        c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
     private void askForGame() {
