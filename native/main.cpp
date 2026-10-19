@@ -302,6 +302,7 @@ void Dispatch(const SDL_Event& e) {
             LOGW("app: Android is low on memory");
             break;
         case SDL_EVENT_SENSOR_UPDATE:
+        case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
             gyro::OnEvent(e);
             return;
         case SDL_EVENT_GAMEPAD_ADDED:

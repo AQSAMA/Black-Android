@@ -1,6 +1,7 @@
-// Aiming by turning the phone, as mobile shooters have it: the gyroscope's turn rates become mouse counts, which the
-// game's mouse look (src/game/mouse.cpp) turns the view by. Off, always on, or only while firing; the mode and the
-// sensitivity are set in the game's options menu and kept in android.toml beside the game's settings.
+// Aiming by turning the phone, as mobile shooters have it, or the controller where it has a gyroscope of its own: the
+// turn rates become mouse counts, which the game's mouse look (src/game/mouse.cpp) turns the view by. Off, always on,
+// or only while firing; the mode and the sensitivity are set in the game's options menu and kept in android.toml
+// beside the game's settings.
 #include <SDL3/SDL.h>
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <toml++/toml.hpp>
 
 #include "app/app.h"
+#include "common/mouse_keyboard.h"
 #include "core/log.h"
 #include "host.h"
 
@@ -26,7 +28,10 @@ std::atomic<uint32_t> g_mode{kOff};
 float g_sensitivity = 1.5f;  // view degrees per degree the phone turns
 bool g_loaded = false;
 SDL_Sensor* g_sensor = nullptr;
+bool g_no_sensor = false;   // the phone has no gyroscope
+bool g_pad_gyro = false;    // a controller's is on
 uint64_t g_last_ns = 0;
+uint64_t g_pad_last_ns = 0;
 
 std::filesystem::path File() { return app::ExeDir() / "android.toml"; }
 
@@ -89,10 +94,31 @@ void NextMode() {
     Save();
 }
 
+// a controller's own gyroscope (a DualShock 4's, a DualSense's), on while a mode wants it; Android has them from 12 on
+bool PumpPads(bool want) {
+    bool any = false;
+    int n = 0;
+    if (SDL_JoystickID* ids = SDL_GetGamepads(&n)) {
+        for (int i = 0; i < n; i++) {
+            SDL_Gamepad* pad = SDL_GetGamepadFromID(ids[i]);
+            if (!pad || !SDL_GamepadHasSensor(pad, SDL_SENSOR_GYRO)) continue;
+            if (SDL_GamepadSensorEnabled(pad, SDL_SENSOR_GYRO) != want) {
+                SDL_SetGamepadSensorEnabled(pad, SDL_SENSOR_GYRO, want);
+                if (want) LOGI("gyro: %s's own", SDL_GetGamepadName(pad));
+                g_pad_last_ns = 0;
+            }
+            any = true;
+        }
+        SDL_free(ids);
+    }
+    return any;
+}
+
 void Pump() {
     if (!g_loaded) Load();
     bool want = g_mode != kOff && host::Foreground();
-    if (want == (g_sensor != nullptr)) return;
+    g_pad_gyro = PumpPads(want);
+    if (want == (g_sensor != nullptr) || g_no_sensor) return;
     if (!want) {
         SDL_CloseSensor(g_sensor);
         g_sensor = nullptr;
@@ -104,31 +130,45 @@ void Pump() {
     g_last_ns = 0;
     if (!g_sensor) {
         LOGW("gyro: no gyroscope on this device");
-        g_mode = kOff;
+        // a controller's may still turn the view
+        g_no_sensor = true;
+        if (!g_pad_gyro) g_mode = kOff;
     }
 }
 
-// SDL's gyro reads in the phone's natural (portrait) axes, radians a second: x right, y up, z out of the screen.
-// Held in landscape, the turn about the world's up axis is the turn about the phone's x axis and the tilt about the
-// world's right axis is the turn about its y axis, signed by which side is up
-void OnEvent(const SDL_Event& e) {
-    if (e.type != SDL_EVENT_SENSOR_UPDATE || !g_sensor || e.sensor.which != SDL_GetSensorID(g_sensor)) return;
-    uint64_t now = e.sensor.sensor_timestamp ? e.sensor.sensor_timestamp : e.sensor.timestamp;
-    float dt = g_last_ns && now > g_last_ns ? float(now - g_last_ns) * 1e-9f : 0;
-    g_last_ns = now;
+// a turn in radians a second about the view's up axis (positive: left) and its right axis (positive: looking up)
+void Turn(float yaw, float pitch, uint64_t now, uint64_t& last) {
+    float dt = last && now > last ? float(now - last) * 1e-9f : 0;
+    last = now;
     if (dt <= 0 || dt > 0.1f) return;
     bool firing = g_mode == kFiring ? touch::Firing() : true;
     if (!firing || !touch::LookActive()) return;
-    float wx = e.sensor.data[0], wy = e.sensor.data[1];
-    if (std::fabs(wx) < kDeadZone) wx = 0;
-    if (std::fabs(wy) < kDeadZone) wy = 0;
-    if (!wx && !wy) return;
-    SDL_Window* w = host::Window();
-    bool flipped = w && SDL_GetCurrentDisplayOrientation(SDL_GetDisplayForWindow(w)) == SDL_ORIENTATION_LANDSCAPE_FLIPPED;
-    float yaw = flipped ? -wx : wx;    // positive: the phone turns left
-    float pitch = flipped ? wy : -wy;  // positive: its top tilts back, the view looks up
+    if (std::fabs(yaw) < kDeadZone) yaw = 0;
+    if (std::fabs(pitch) < kDeadZone) pitch = 0;
+    if (!yaw && !pitch) return;
     float k = g_sensitivity * dt * (180.0f / 3.14159265f) / kDegreesPerCount;
     touch::AddLook(-yaw * k, -pitch * k);
+}
+
+// The phone's gyro reads in its natural (portrait) axes, radians a second: x right, y up, z out of the screen. Held in
+// landscape, the turn about the world's up axis is the turn about the phone's x axis and the tilt about the world's
+// right axis is the turn about its y axis, signed by which side is up. A controller's reads as held in front of the
+// player: x right, y up, z back, so its pitch is about x and its yaw about y. The controller turns the view while it is
+// what is played with, the phone while the touch screen is.
+void OnEvent(const SDL_Event& e) {
+    bool touch = input::TouchActive();
+    if (e.type == SDL_EVENT_GAMEPAD_SENSOR_UPDATE) {
+        if (e.gsensor.sensor != SDL_SENSOR_GYRO || touch) return;
+        uint64_t now = e.gsensor.sensor_timestamp ? e.gsensor.sensor_timestamp : e.gsensor.timestamp;
+        Turn(e.gsensor.data[1], e.gsensor.data[0], now, g_pad_last_ns);
+        return;
+    }
+    if (!g_sensor || e.sensor.which != SDL_GetSensorID(g_sensor) || (g_pad_gyro && !touch)) return;
+    uint64_t now = e.sensor.sensor_timestamp ? e.sensor.sensor_timestamp : e.sensor.timestamp;
+    float wx = e.sensor.data[0], wy = e.sensor.data[1];
+    SDL_Window* w = host::Window();
+    bool flipped = w && SDL_GetCurrentDisplayOrientation(SDL_GetDisplayForWindow(w)) == SDL_ORIENTATION_LANDSCAPE_FLIPPED;
+    Turn(flipped ? -wx : wx, flipped ? wy : -wy, now, g_last_ns);
 }
 
 }  // namespace gyro
