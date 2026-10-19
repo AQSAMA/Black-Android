@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
 import android.provider.Settings;
 import android.view.InputDevice;
 import android.view.InputEvent;
@@ -17,12 +19,14 @@ import android.view.WindowInsetsController;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLControllerManager;
 
 // SDL's activity running libmain.so. The game goes in the Black folder on the phone's storage
-// (/storage/emulated/0/Black). Reading it needs all files access, a special access Android grants on a settings page
+// (/storage/emulated/0/Black) or at the top of an SD card. Reading it needs all files access, a special access Android grants on a settings page
 // of its own, never among the app's ordinary permissions. This asks for it and says where the game goes, each time
 // the app comes back without them; the game itself waits and starts as soon as it finds the files.
 // At launch it also asks GitHub for a newer release (UpdateChecker) and tells of it once nothing else is asked.
@@ -187,7 +191,23 @@ public class BlackActivity extends SDLActivity {
         }
         File shared = new File(Environment.getExternalStorageDirectory(), SHARED);
         shared.mkdirs();
-        if (!hasGame(shared) && !hasGame(new File(shared, "assets"))) tellWhereTheGameGoes();
+        if (hasGame(shared) || hasGame(new File(shared, "assets"))) return;
+        for (File card : cardFolders())
+            if (hasGame(card) || hasGame(new File(card, "assets"))) return;
+        tellWhereTheGameGoes();
+    }
+
+    // the Black folder on each SD card or USB stick mounted, as native/game_files.cpp looks in them
+    private List<File> cardFolders() {
+        List<File> out = new ArrayList<>();
+        StorageManager sm = getSystemService(StorageManager.class);
+        if (sm == null) return out;
+        for (StorageVolume v : sm.getStorageVolumes()) {
+            File root = v.getDirectory();
+            if (v.isPrimary() || root == null || !Environment.MEDIA_MOUNTED.equals(v.getState())) continue;
+            out.add(new File(root, SHARED));
+        }
+        return out;
     }
 
     // the newer release, once the app is in front with no other dialog up; shown once a run
@@ -252,6 +272,7 @@ public class BlackActivity extends SDLActivity {
                 .setTitle("Game files")
                 .setMessage("Copy the game into the Black folder on your phone's storage:\n\n"
                         + "/storage/emulated/0/" + SHARED + "\n\n"
+                        + "or into a Black folder at the top of your SD card.\n\n"
                         + "Its disc image (.iso), or default.xbe with its folders. The game starts as soon as they "
                         + "are there.\n\n"
                         + "Or import the disc image from your Downloads, a cloud drive or a USB stick.")

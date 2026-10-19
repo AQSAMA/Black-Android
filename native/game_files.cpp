@@ -1,5 +1,5 @@
-// The game on Android: its files or a disc image (.iso) in the Black folder on the phone's storage (all files access
-// granted) or in the app's own assets folder. The xbe must be the one this build was recompiled from; the Europe xbe
+// The game on Android: its files or a disc image (.iso) in the Black folder on the phone's storage or on an SD card
+// (all files access granted) or in the app's own assets folder. The xbe must be the one this build was recompiled from; the Europe xbe
 // is turned into the US one by src/common/europe.patch, linked into the library.
 #include <SDL3/SDL.h>
 
@@ -36,8 +36,31 @@ namespace fs = std::filesystem;
 // the shared storage's folder for the game, readable with all files access: the files or the image in it, or in its
 // assets folder
 constexpr const char* kShared = "/storage/emulated/0/Black";
+constexpr const char* kVolumes = "/storage";
 
-std::vector<fs::path> AssetFolders() { return {fs::path(kShared), fs::path(kShared) / "assets", ExeDir() / "assets"}; }
+// the Black folder on each SD card or USB stick Android has mounted, /storage/<volume id>/Black; all files access
+// reads them as it does the phone's own storage
+std::vector<fs::path> RemovableFolders() {
+    std::vector<fs::path> out;
+    std::error_code ec;
+    for (auto& e : fs::directory_iterator(kVolumes, ec)) {
+        std::string name = e.path().filename().string();
+        if (name == "emulated" || name == "self" || !e.is_directory(ec)) continue;
+        out.push_back(e.path() / "Black");
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+std::vector<fs::path> AssetFolders() {
+    std::vector<fs::path> out = {fs::path(kShared), fs::path(kShared) / "assets"};
+    for (const fs::path& card : RemovableFolders()) {
+        out.push_back(card);
+        out.push_back(card / "assets");
+    }
+    out.push_back(ExeDir() / "assets");
+    return out;
+}
 
 std::string Sha1(const std::vector<uint8_t>& data) {
     alignas(8) uint8_t ctx[128];
@@ -159,8 +182,10 @@ void WaitForGame() {
     if (!logged) {
         std::error_code ec;
         fs::is_directory(kShared, ec);
-        LOGE("game: no game files in %s or %s%s, waiting for them", kShared, (ExeDir() / "assets").c_str(),
-             ec == std::errc::permission_denied ? ", no access to the first" : "");
+        std::string cards;
+        for (const fs::path& card : RemovableFolders()) cards += ", " + card.string();
+        LOGE("game: no game files in %s%s or %s%s, waiting for them", kShared, cards.c_str(),
+             (ExeDir() / "assets").c_str(), ec == std::errc::permission_denied ? ", no access to the first" : "");
         logged = true;
     }
     for (int i = 0; i < 10; i++) {
