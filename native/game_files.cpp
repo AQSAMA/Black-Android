@@ -175,6 +175,41 @@ std::string Utf8(const wchar_t* w) {
     return s;
 }
 
+// an image cut short (a copy that stopped, a bad download) still opens, its folders being near the start; the game
+// then fails a read later and shows its dirty disc screen. Its files are checked against its size, for the log
+void CheckImage(const kernel::Disc& disc, const fs::path& iso) {
+    std::error_code ec;
+    uint64_t size = fs::file_size(iso, ec);
+    if (ec) {
+        LOGE("game: %s: its size cannot be read: %s", iso.string().c_str(), ec.message().c_str());
+        return;
+    }
+    uint64_t end = 0;
+    size_t files = 0, past = 0;
+    std::string first;
+    std::vector<std::pair<const kernel::Disc::Entry*, std::string>> todo{{disc.Find(std::string_view()), ""}};
+    while (!todo.empty()) {
+        auto [dir, path] = todo.back();
+        todo.pop_back();
+        if (!dir) continue;
+        for (const kernel::Disc::Entry& e : dir->children) {
+            std::string name = path.empty() ? e.name : path + "\\" + e.name;
+            if (e.dir) {
+                todo.push_back({&e, name});
+                continue;
+            }
+            files++;
+            uint64_t file_end = e.offset + e.size;
+            end = std::max(end, file_end);
+            if (file_end > size && past++ == 0) first = name;
+        }
+    }
+    LOGR("Game: image %llu bytes, %zu files up to byte %llu", (unsigned long long)size, files, (unsigned long long)end);
+    if (past)
+        LOGE("game: %s is cut short: %zu of its files end past its %llu bytes, %s the first; copy the image again",
+             iso.string().c_str(), past, (unsigned long long)size, first.c_str());
+}
+
 // no game yet: the activity's dialog tells the player where it goes and asks for the access; this waits a moment
 // before looking again, keeping SDL's events moving
 void WaitForGame() {
@@ -265,6 +300,7 @@ int Search(GameFiles& game) {
                 LOGW("game: %s has no %s", iso.string().c_str(), IMAGE_XBE);
                 continue;
             }
+            CheckImage(*disc, iso);
             if (consider(assets, iso, std::move(xbe), std::move(disc))) return 1;
         }
     }
