@@ -511,8 +511,9 @@ enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag, Pinch };
 // the host. Where it sits is the layout's, which the player edits and picks presets for
 enum : int { kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
 constexpr int kBit = 8;  // kBit + n: buttons bit n (dpad up down left right, start, back, left thumb, right thumb)
-enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor };
-enum class When : uint8_t { Play, Menus, Both };
+enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right };
+// Play while the player has the controls, Game outside the menus (cutscenes too), Menus in the menus and options
+enum class When : uint8_t { Play, Menus, Game };
 struct Button {
     const char* id;     // its key in layout.toml
     const char* label;  // in the layout editor
@@ -537,10 +538,15 @@ constexpr Button kButtons[] = {
     {"weapon", "Weapon", Icon::Swap, kBit + 3, When::Play},
     {"health", "Health pack", Icon::Health, kBit + 1, When::Play},
     {"map", "Objectives", Icon::Map, kBit + 5, When::Play},
-    {"pause", "Pause", Icon::Pause, kBit + 4, When::Both},
+    {"pause", "Pause", Icon::Pause, kBit + 4, When::Game},
     {"gyro", "Gyroscope", Icon::Gyro, kGyro, When::Play},
     {"back", "Back", Icon::Back, kAnalogB, When::Menus, false, true},
     {"suppressor", "Suppressor", Icon::Suppressor, kAnalogY, When::Play},
+    // a dpad in the menus and the options, where a tap on a row is hard to aim
+    {"dpad_up", "Up", Icon::Up, kBit + 0, When::Menus},
+    {"dpad_down", "Down", Icon::Down, kBit + 1, When::Menus},
+    {"dpad_left", "Left", Icon::Left, kBit + 2, When::Menus},
+    {"dpad_right", "Right", Icon::Right, kBit + 3, When::Menus},
 };
 constexpr size_t kButtonCount = std::size(kButtons);
 constexpr size_t kStick = kButtonCount;  // the stick's place, after the buttons'
@@ -557,7 +563,9 @@ constexpr Layout kTwoFinger = {{
     {0.843f, 0.56f, 0.05f}, {0.789f, 0.40f, 0.055f}, {0.784f, 0.70f, 0.05f}, {0.838f, 0.84f, 0.055f},
     {0.964f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
-    {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f}, {0.108f, 0.70f, 0.12f},
+    {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f},
+    {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.108f, 0.70f, 0.12f},
 }};
 // claw with the left index finger: fire at the top left, the right thumb turns and aims
 constexpr Layout kThreeFinger = {{
@@ -565,7 +573,9 @@ constexpr Layout kThreeFinger = {{
     {0.80f, 0.60f, 0.045f}, {0.765f, 0.40f, 0.05f}, {0.745f, 0.76f, 0.045f}, {0.84f, 0.87f, 0.05f},
     {0.955f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
-    {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f}, {0.13f, 0.72f, 0.12f},
+    {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f},
+    {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.13f, 0.72f, 0.12f},
 }};
 // both index fingers on top: fire at the top left, aim and crouch at the top right
 constexpr Layout kFourFinger = {{
@@ -573,7 +583,9 @@ constexpr Layout kFourFinger = {{
     {0.78f, 0.55f, 0.045f}, {0.73f, 0.38f, 0.05f}, {0.72f, 0.75f, 0.045f}, {0.80f, 0.87f, 0.05f},
     {0.83f, 0.24f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
-    {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f}, {0.13f, 0.72f, 0.12f},
+    {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f},
+    {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.13f, 0.72f, 0.12f},
 }};
 struct Preset {
     const char* id;
@@ -655,6 +667,8 @@ void LoadLayout() {
         g_opacity = std::clamp(float(t["opacity"].value_or(double(g_opacity))), 0.2f, 1.0f);
         g_scale = std::clamp(float(t["scale"].value_or(double(g_scale))), 0.5f, 1.5f);
         for (size_t i = 0; i <= kButtonCount; i++) {
+            // the menus' controls are not in the editor: always the preset's
+            if (i != kStick && kButtons[i].when == When::Menus) continue;
             const char* id = i == kStick ? "stick" : kButtons[i].id;
             const toml::table* p = t["controls"][id].as_table();
             if (!p) continue;
@@ -698,7 +712,10 @@ bool ButtonShown(size_t i) {
     const Button& b = kButtons[i];
     if (g_editing) return b.when != When::Menus;
     if (g_layout[i].hidden) return false;
-    return b.when == When::Both || (b.when == When::Menus) == InMenus();
+    if (b.when == When::Game) return !InMenus();
+    if (b.when == When::Menus) return InMenus();
+    // in play only while the player has the controls: none over a loading screen or a cutscene
+    return !InMenus() && input::Play();
 }
 
 void Centre(size_t i, float& cx, float& cy) {
@@ -779,11 +796,22 @@ void UpdateStick(const Finger& f) {
     g_stick_y = -dy;
 }
 
+// a dpad arrow held in the menus: a step as it comes down, then steps at a calm pace once held a while; the game
+// steps on every poll the arrow is down, too quick to land on a row
+constexpr uint64_t kStepMs = 120, kRepeatAfterMs = 450, kRepeatMs = 180;
+
+bool DpadStep(uint64_t held) {
+    if (held < kStepMs) return true;
+    return held >= kRepeatAfterMs && (held - kRepeatAfterMs) % kRepeatMs < kStepMs / 2;
+}
+
+bool Dpad(size_t i) { return kButtons[i].press >= kBit && kButtons[i].press < kBit + 4 && kButtons[i].when == When::Menus; }
+
 void Recount() {
     std::fill(std::begin(g_pressed), std::end(g_pressed), false);
     bool stick = false;
     for (const Finger& f : g_fingers) {
-        if (f.role == Role::Button) g_pressed[f.button] = true;
+        if (f.role == Role::Button) g_pressed[f.button] = !Dpad(f.button) || DpadStep(NowMs() - f.down_ms);
         if (f.role == Role::Stick) stick = true;
     }
     if (!stick) g_stick_x = g_stick_y = 0;
@@ -853,6 +881,7 @@ void FingerDown(SDL_FingerID id, float x, float y) {
     if (b < kButtonCount) {
         f.role = Role::Button;
         f.button = b;
+        f.down_ms = NowMs();
         if (kButtons[b].press == kPanel) app::ToggleMenu();
         if (kButtons[b].press == kGyro) gyro::NextMode();
     } else if (InMenus()) {
@@ -1066,6 +1095,7 @@ bool OnEvent(const SDL_Event& e) {
 void Apply(int port, input::Pad& pad) {
     if (port != 0 || g_editing) return;
     std::lock_guard lock(g_lock);
+    Recount();  // a held dpad arrow's steps go by the clock
     bool used = false;
     for (size_t i = 0; i < kButtonCount; i++) {
         if (!g_pressed[i]) continue;
@@ -1243,8 +1273,21 @@ void DrawIcon(const Pen& p, Icon icon) {
                 p.dl->AddLine(p.P(x, -0.17f), p.P(x, 0.17f), IM_COL32(0, 0, 0, 140), p.th * 0.6f);
             break;
         case Icon::Back:
+        case Icon::Left:
             p.Line(0.14f, -0.36f, -0.22f, 0);
             p.Line(-0.22f, 0, 0.14f, 0.36f);
+            break;
+        case Icon::Right:
+            p.Line(-0.14f, -0.36f, 0.22f, 0);
+            p.Line(0.22f, 0, -0.14f, 0.36f);
+            break;
+        case Icon::Up:
+            p.Line(-0.36f, 0.14f, 0, -0.22f);
+            p.Line(0, -0.22f, 0.36f, 0.14f);
+            break;
+        case Icon::Down:
+            p.Line(-0.36f, -0.14f, 0, 0.22f);
+            p.Line(0, 0.22f, 0.36f, -0.14f);
             break;
     }
 }
@@ -1337,7 +1380,7 @@ void Draw() {
             dl->AddLine(ImVec2(cx - k, cy + k), ImVec2(cx + k, cy - k), IM_COL32(255, 80, 60, 220), th);
         }
     }
-    if (editing || (!InMenus() && !app::MenuOpen())) DrawStick(dl, th);
+    if (editing || (!InMenus() && !app::MenuOpen() && input::Play())) DrawStick(dl, th);
     if (editing) {
         if (g_selected == int(kStick)) {
             ImVec2 at(g_layout[kStick].x * Width(), g_layout[kStick].y * h);
