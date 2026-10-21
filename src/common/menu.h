@@ -24,6 +24,8 @@ struct Row {
 };
 // 0 graphics, 1 touch controls, 2 general, 3 mouse and keyboard, 4 cheats
 const Row* Page(int page, size_t* count);
+// the sticks' rows, on the game's control setup page; the panel shows them on its touch controls page
+const Row* Controller(size_t* count);
 std::string Value(const Row& row, int step = 0);  // what the row shows, stepped first when step is not zero
 void Defaults(int page);
 bool Restorable(int page);  // the page ends with RESTORE DEFAULTS in the game's options

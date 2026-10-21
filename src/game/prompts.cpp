@@ -21,6 +21,7 @@ using namespace kernel;
 
 namespace game {
 uint32_t OptionsText(uint32_t id);  // options_menu.cpp
+uint32_t SaveName(uint32_t id);  // save_name.cpp
 bool Translated();  // language.cpp
 const char* IndonesianString(uint32_t id);  // language.cpp
 }
@@ -135,6 +136,11 @@ X86_FUNC(sub_001F3A80) {
     __imp__sub_001F3A80(ctx, base);
     if (uint32_t text = game::OptionsText(id)) {
         ctx.eax = text;
+        return;
+    }
+    // the save's name, in no language's words
+    if (uint32_t name = game::SaveName(id)) {
+        ctx.eax = name;
         return;
     }
     if (!ctx.eax) return;

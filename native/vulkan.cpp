@@ -25,6 +25,7 @@
 
 #include "app/app.h"
 #include "common/aspect.h"
+#include "common/options.h"
 #include "core/log.h"
 #include "d3d/gpu_frame.h"
 #include "gpu/backend.h"
@@ -72,6 +73,98 @@ float4 psmain(O i) : SV_Target {
     c.rgb *= opts.w;
     if (opts.x > 0) c.rgb = float3(lut.Sample(ps, float2(c.r, 0.5)).r, lut.Sample(ps, float2(c.g, 0.5)).g, lut.Sample(ps, float2(c.b, 0.5)).b);
     return float4(c.rgb, opts.y > 0 ? c.a : 1);
+}
+)";
+
+// the screen filters, the frame onto the screen through one of them. src.xy a texel of the frame, src.z seconds for
+// what moves (grain, VHS), src.w the colour look. pscrt: crt.x the lines, a whole number of pixels each so they never
+// beat against the screen's; crt.y how dark the gaps between them are, crt.z the tube's curve, crt.w the phosphor
+// mask's dimming; look.x the corners' shade, look.y the brightness the lines and mask take back
+const char* kFilterHlsl = R"(
+cbuffer B : register(b1) { float4 uvrect; float4 opts; float4 crt; float4 look; float4 src; };
+Texture2D img : register(t0);
+Texture2D lut : register(t1);
+SamplerState ls : register(s0);
+SamplerState ps : register(s1);
+struct O { float4 p : SV_Position; float2 uv : TEXCOORD0; };
+O vs(uint id : SV_VertexID) {
+    O o;
+    float2 t = float2((id << 1) & 2, id & 2);
+    o.p = float4(t * float2(2, -2) + float2(-1, 1), 0, 1);
+    o.uv = uvrect.xy + t * uvrect.zw;
+    return o;
+}
+float3 Fetch(float2 uv) {
+    float3 c = img.SampleLevel(ls, uv, 0).rgb;
+    if (opts.x > 0) c = float3(lut.Sample(ps, float2(c.r, 0.5)).r, lut.Sample(ps, float2(c.g, 0.5)).g, lut.Sample(ps, float2(c.b, 0.5)).b);
+    return c;
+}
+float Luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
+float Noise(float2 p) { return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
+float Corners(float2 uv, float k) { return pow(saturate(16 * uv.x * uv.y * (1 - uv.x) * (1 - uv.y)), k); }
+
+float4 pscrt(O i) : SV_Target {
+    float2 cc = i.uv * 2 - 1;
+    cc *= 1 + crt.z * cc.yx * cc.yx;
+    if (any(abs(cc) > 1)) return float4(0, 0, 0, 1);
+    float2 uv = cc * 0.5 + 0.5;
+    float3 c = Fetch(uv);
+    // the beam is brightest at a line's middle, and a bright one spreads over the gap
+    float f = frac(uv.y * crt.x);
+    float gap = cos(3.14159265 * f);
+    float scan = 1 - crt.y * gap * gap;
+    scan = lerp(scan, 1, saturate(Luma(c)) * 0.4);
+    // an aperture grille: each column of pixels one of the phosphors
+    float col = fmod(floor(i.p.x), 3);
+    float3 grille = 1 - crt.w * float3(col != 0, col != 1, col != 2);
+    return float4(saturate(c * scan * grille * Corners(uv, look.x) * look.y), 1);
+}
+
+// contrast adaptive: an edge gains what its neighbours lack, less where it is near black or white already
+float4 pssharpen(O i) : SV_Target {
+    float3 c = Fetch(i.uv);
+    float3 n = Fetch(i.uv - float2(0, src.y)), s = Fetch(i.uv + float2(0, src.y));
+    float3 w = Fetch(i.uv - float2(src.x, 0)), e = Fetch(i.uv + float2(src.x, 0));
+    float3 lo = min(c, min(min(n, s), min(w, e))), hi = max(c, max(max(n, s), max(w, e)));
+    float3 amp = sqrt(saturate(min(lo, 1 - hi) / max(hi, 1e-4)));
+    return float4(saturate(c + (4 * c - n - s - w - e) * amp * 0.35), 1);
+}
+
+float4 pscolor(O i) : SV_Target {
+    float2 uv = i.uv;
+    float t = src.z;
+    int mode = (int)src.w;
+    if (mode == 4) {
+        // VHS: lines torn sideways a little, a band of worse tracking rolling down
+        float row = floor(uv.y * 240);
+        float band = saturate(1 - abs(frac(uv.y - t * 0.07) - 0.5) * 12);
+        uv.x += (Noise(float2(row, floor(t * 30))) - 0.5) * (0.0015 + band * 0.006);
+    }
+    float3 c = Fetch(uv);
+    if (mode == 0) {  // vibrant
+        c = lerp(Luma(c), c, 1.35);
+        c = (c - 0.5) * 1.08 + 0.5;
+    } else if (mode == 1) {  // noir: black and white, hard, grain
+        float l = saturate((Luma(c) - 0.5) * 1.35 + 0.5);
+        l += (Noise(i.p.xy + frac(t) * 97) - 0.5) * 0.05;
+        c = l * Corners(uv, 0.35);
+    } else if (mode == 2) {  // sepia
+        c = float3(dot(c, float3(0.393, 0.769, 0.189)), dot(c, float3(0.349, 0.686, 0.168)),
+                   dot(c, float3(0.272, 0.534, 0.131)));
+        c *= Corners(uv, 0.2);
+    } else if (mode == 3) {  // night vision: brightened green, grain, faint lines, a dark rim
+        float l = pow(saturate(Luma(c)), 0.7) * 1.5;
+        l += (Noise(i.p.xy + frac(t) * 131) - 0.5) * 0.12;
+        l *= 1 - 0.12 * fmod(floor(i.p.y), 2);
+        c = float3(0.25, 1.0, 0.35) * l * Corners(uv, 0.6);
+    } else if (mode == 4) {  // VHS: colour bleeding sideways, washed out, grain
+        float off = src.x * 2.5;
+        c.r = Fetch(uv + float2(off, 0)).r;
+        c.b = Fetch(uv - float2(off, 0)).b;
+        c = lerp(Luma(c), c, 0.8) * 0.95 + 0.03;
+        c += (Noise(i.p.xy + frac(t) * 173) - 0.5) * 0.06;
+    }
+    return float4(saturate(c), 1);
 }
 )";
 
@@ -3010,9 +3103,35 @@ void VulkanBackend::DrawFrame(Target* t, uint32_t index) {
     float aspect = game::Aspect();
     float w = float(swap_extent_.width), h = float(swap_extent_.height);
     float vw = std::min(w, h * aspect), vh = vw / aspect;
-    float c[8] = {0, 0, 1, 1, gamma_ ? 1.0f : 0.0f, 0, 1, 1};
+    uint32_t filter = std::min(game::Opt().screen_filter, 8u);
+    uint32_t crt = filter <= 2 ? filter : 0;
+    float c[20] = {0, 0, 1, 1, gamma_ ? 1.0f : 0.0f, 0, 1, 1};
+    if (t) {
+        // a texel of the frame, seconds that wrap before a float loses them, the colour look (4 vibrant on)
+        using clock = std::chrono::steady_clock;
+        float secs = std::fmod(std::chrono::duration<float>(clock::now().time_since_epoch()).count(), 1000.0f);
+        float src[4] = {1.0f / float(t->img.w), 1.0f / float(t->img.h), secs, float(filter >= 4 ? filter - 4 : 0)};
+        std::memcpy(c + 16, src, sizeof(src));
+    }
+    if (crt) {
+        // light, then strong: the gaps' darkness, the curve, the mask's dimming, the corners' shade
+        constexpr float kGap[] = {0.35f, 0.6f};
+        constexpr float kCurve[] = {0.02f, 0.045f};
+        constexpr float kMask[] = {0.15f, 0.3f};
+        constexpr float kCorner[] = {0.1f, 0.2f};
+        int k = int(crt) - 1;
+        // the game's lines, as many screen pixels each as come nearest
+        float per = std::max(1.0f, std::round(vh / float(guest_h_)));
+        float lines = std::floor(vh / per);
+        // on average a line keeps 1 - gap / 2 and the mask 1 - 2 mask / 3: that much taken back, most of it
+        float kept = (1 - kGap[k] / 2) * (1 - 2 * kMask[k] / 3);
+        float rest[8] = {lines, kGap[k], kCurve[k], kMask[k], kCorner[k], 1 + (1 / kept - 1) * 0.8f, 0, 0};
+        std::memcpy(c + 8, rest, sizeof(rest));
+    }
     Alloc cbuf = Constants(c, sizeof(c));
-    VkPipeline pipe = t ? FullScreenPipeline(kBlitHlsl, "psmain", swap_fmt_, VK_FORMAT_UNDEFINED, false) : VK_NULL_HANDLE;
+    const char* hlsl = filter ? kFilterHlsl : kBlitHlsl;
+    const char* entry = crt ? "pscrt" : filter == 3 ? "pssharpen" : filter ? "pscolor" : "psmain";
+    VkPipeline pipe = t ? FullScreenPipeline(hlsl, entry, swap_fmt_, VK_FORMAT_UNDEFINED, false) : VK_NULL_HANDLE;
     VkDescriptorSet set = VK_NULL_HANDLE;
     if (pipe) {
         Transition(t->img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);

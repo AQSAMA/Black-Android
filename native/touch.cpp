@@ -511,7 +511,7 @@ enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag, Pinch };
 // the host. Where it sits is the layout's, which the player edits and picks presets for
 enum : int { kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
 constexpr int kBit = 8;  // kBit + n: buttons bit n (dpad up down left right, start, back, left thumb, right thumb)
-enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right };
+enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right, Zoom };
 // Play while the player has the controls, Game outside the menus (cutscenes too), Menus in the menus and options
 enum class When : uint8_t { Play, Menus, Game };
 struct Button {
@@ -547,7 +547,12 @@ constexpr Button kButtons[] = {
     {"dpad_down", "Down", Icon::Down, kBit + 1, When::Menus},
     {"dpad_left", "Left", Icon::Left, kBit + 2, When::Menus},
     {"dpad_right", "Right", Icon::Right, kBit + 3, When::Menus},
+    // the firing mode's button again, beside use while a scope is up: the scope's level, X2 or X5, and a tap switches
+    {"zoom", "Scope zoom", Icon::Zoom, kBit + 0, When::Play},
 };
+constexpr size_t kZoomButton = std::size(kButtons) - 1;
+constexpr float kScoped = 0.6f;  // game::g_zoom under this is a scope's, not a rifle's sights
+constexpr float kScopeX5 = 0.36f;  // and under this its X5, between X2's 0.5 and X5's 0.25
 constexpr size_t kButtonCount = std::size(kButtons);
 constexpr size_t kStick = kButtonCount;  // the stick's place, after the buttons'
 
@@ -565,6 +570,7 @@ constexpr Layout kTwoFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.715f, 0.40f, 0.05f},
     {0.108f, 0.70f, 0.12f},
 }};
 // claw with the left index finger: fire at the top left, the right thumb turns and aims
@@ -575,6 +581,7 @@ constexpr Layout kThreeFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.69f, 0.40f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
 // both index fingers on top: fire at the top left, aim and crouch at the top right
@@ -585,6 +592,7 @@ constexpr Layout kFourFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.655f, 0.38f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
 struct Preset {
@@ -712,6 +720,7 @@ bool ButtonShown(size_t i) {
     const Button& b = kButtons[i];
     if (g_editing) return b.when != When::Menus;
     if (g_layout[i].hidden) return false;
+    if (i == kZoomButton && !(game::g_zoom < kScoped)) return false;
     if (b.when == When::Game) return !InMenus();
     if (b.when == When::Menus) return InMenus();
     // in play only while the player has the controls: none over a loading screen or a cutscene. A hint's pause stops
@@ -726,15 +735,24 @@ void Centre(size_t i, float& cx, float& cy) {
 
 float Radius(size_t i) { return g_layout[i].r * g_scale * Height(); }
 
-// the editor's bar at the top: Reset, smaller and bigger for the picked control, Cancel, Done, in screen shares
-constexpr const char* kBarLabels[] = {"RESET", "-", "+", "CANCEL", "DONE"};
-enum { kBarReset, kBarSmaller, kBarBigger, kBarCancel, kBarDone, kBarCount };
-constexpr float kBarY = 0.17f, kBarH = 0.09f, kBarW = 0.13f, kBarGap = 0.02f;
+// the editor's bar at the top: Reset, smaller and bigger for the picked control, hide or show it, Cancel, Done, in
+// screen shares
+constexpr const char* kBarLabels[] = {"RESET", "-", "+", "HIDE", "CANCEL", "DONE"};
+enum { kBarReset, kBarSmaller, kBarBigger, kBarHide, kBarCancel, kBarDone, kBarCount };
+constexpr float kBarY = 0.17f, kBarH = 0.09f, kBarW = 0.14f, kBarGap = 0.02f;
 constexpr float kBarSizeW = 0.07f;                       // the - and + buttons
 constexpr float kMinRadius = 0.02f, kMaxRadius = 0.25f;  // a control's own radius, in screen heights
 constexpr float kSizeStep = 1.1f;                        // a tap on - or +
 
 float BarWidth(int i) { return i == kBarSmaller || i == kBarBigger ? kBarSizeW : kBarW; }
+
+// the picked control can be hidden: not the stick, nor the way back out of the menus
+bool Hideable(int i) { return i >= 0 && size_t(i) < kButtonCount && !kButtons[size_t(i)].keep; }
+
+const char* BarLabel(int i) {
+    if (i == kBarHide && Hideable(g_selected) && g_layout[size_t(g_selected)].hidden) return "SHOW";
+    return kBarLabels[i];
+}
 
 // the bar's button under a point, -1 for none
 int BarAt(float x, float y, float rect[4] = nullptr, int which = -1) {
@@ -834,6 +852,9 @@ void EditDown(Finger& f, float x, float y) {
                 float r = g_layout[size_t(g_selected)].r;
                 Resize(size_t(g_selected), bar == kBarBigger ? r * kSizeStep : r / kSizeStep);
             }
+            return;
+        case kBarHide:
+            if (Hideable(g_selected)) g_layout[size_t(g_selected)].hidden ^= true;
             return;
         case kBarCancel:
             CloseEditor(false);
@@ -1290,6 +1311,14 @@ void DrawIcon(const Pen& p, Icon icon) {
             p.Line(-0.36f, -0.14f, 0, 0.22f);
             p.Line(0, 0.22f, 0.36f, -0.14f);
             break;
+        case Icon::Zoom: {  // the scope's level, X2 or X5: the turn scales by a half at X2, a quarter at X5, not a
+            // fifth, so by which it is nearer; the editor shows X2
+            const char* text = !g_editing && game::g_zoom < kScopeX5 ? "X5" : "X2";
+            float size = p.r * 0.8f;
+            ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(size, FLT_MAX, 0, text);
+            p.dl->AddText(ImGui::GetFont(), size, ImVec2(p.c.x - ts.x / 2, p.c.y - ts.y / 2), p.col, text);
+            break;
+        }
     }
 }
 
@@ -1334,15 +1363,18 @@ void DrawEditorBar(ImDrawList* dl, float th) {
         BarAt(0, 0, r, i);
         bool done = i == kBarDone;
         bool size = i == kBarSmaller || i == kBarBigger;
-        int alpha = size && g_selected < 0 ? 90 : 240;  // - and + wait for a control to be picked
+        // - and + wait for a control to be picked, hide for one that can be
+        int alpha = (size && g_selected < 0) || (i == kBarHide && !Hideable(g_selected)) ? 90 : 240;
         dl->AddRectFilled(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]),
                           done ? IM_COL32(150, 115, 45, 235) : IM_COL32(20, 18, 14, 225), h * 0.015f);
         dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, alpha), h * 0.015f, 0, th * 0.7f);
         CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * (size ? 0.06f : 0.042f),
-                    IM_COL32(255, 255, 255, alpha), app::Ui(kBarLabels[i]).c_str());
+                    IM_COL32(255, 255, 255, alpha), app::Ui(BarLabel(i)).c_str());
     }
     CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.05f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
                 app::Ui("DRAG TO MOVE, PINCH OR - + TO RESIZE").c_str());
+    CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.1f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
+                app::Ui("TAP A CONTROL, THEN HIDE OR SHOW").c_str());
 }
 
 }  // namespace
