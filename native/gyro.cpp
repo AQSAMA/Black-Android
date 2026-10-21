@@ -26,6 +26,8 @@ constexpr const char* kNames[kModes] = {"OFF", "ON", "FIRE"};
 
 std::atomic<uint32_t> g_mode{kOff};
 float g_sensitivity = 1.5f;  // view degrees per degree the phone turns
+bool g_invert_x = false;     // a turn left looks right
+bool g_invert_y = false;     // a tilt up looks down
 bool g_loaded = false;
 SDL_Sensor* g_sensor = nullptr;
 bool g_no_sensor = false;   // the phone has no gyroscope
@@ -41,12 +43,17 @@ void Load() {
         toml::table t = toml::parse_file(File().string());
         g_mode = std::min<uint32_t>(t["gyro"].value_or(uint32_t(kOff)), kModes - 1);
         g_sensitivity = float(t["gyro_sensitivity"].value_or(double(g_sensitivity)));
+        g_invert_x = t["gyro_invert_x"].value_or(g_invert_x);
+        g_invert_y = t["gyro_invert_y"].value_or(g_invert_y);
     } catch (...) {
     }
 }
 
 void Save() {
-    toml::table t{{"gyro", int64_t(g_mode.load())}, {"gyro_sensitivity", double(g_sensitivity)}};
+    toml::table t{{"gyro", int64_t(g_mode.load())},
+                  {"gyro_sensitivity", double(g_sensitivity)},
+                  {"gyro_invert_x", g_invert_x},
+                  {"gyro_invert_y", g_invert_y}};
     std::ofstream(File()) << t << "\n";
 }
 
@@ -83,6 +90,23 @@ float Sensitivity() {
 void SetSensitivity(float s) {
     if (!g_loaded) Load();
     g_sensitivity = std::clamp(s, 0.1f, 5.0f);
+    Save();
+}
+
+bool InvertX() {
+    if (!g_loaded) Load();
+    return g_invert_x;
+}
+
+bool InvertY() {
+    if (!g_loaded) Load();
+    return g_invert_y;
+}
+
+void SetInvert(bool x, bool y) {
+    if (!g_loaded) Load();
+    g_invert_x = x;
+    g_invert_y = y;
     Save();
 }
 
@@ -147,7 +171,7 @@ void Turn(float yaw, float pitch, uint64_t now, uint64_t& last) {
     if (std::fabs(pitch) < kDeadZone) pitch = 0;
     if (!yaw && !pitch) return;
     float k = g_sensitivity * dt * (180.0f / 3.14159265f) / kDegreesPerCount;
-    touch::AddLook(-yaw * k, -pitch * k);
+    touch::AddLook((g_invert_x ? yaw : -yaw) * k, (g_invert_y ? pitch : -pitch) * k);
 }
 
 // The phone's gyro reads in its natural (portrait) axes, radians a second: x right, y up, z out of the screen. Held in

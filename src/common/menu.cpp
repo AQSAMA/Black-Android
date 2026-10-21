@@ -30,6 +30,9 @@ const char* ModeName();
 void SetMode(uint32_t mode);
 float Sensitivity();
 void SetSensitivity(float s);
+bool InvertX();
+bool InvertY();
+void SetInvert(bool x, bool y);
 }  // namespace gyro
 
 // native/touch.cpp: the touch controls' layout
@@ -84,6 +87,9 @@ constexpr uint32_t kDistances[] = {1, 2, 4, 8};
 const char* const kDistanceNames[] = {"GAME DEFAULT", "2x", "4x", "8x"};
 constexpr uint32_t kFmvScales[] = {0, 1};
 const char* const kFmvScaleNames[] = {"FILL", "4:3"};
+constexpr uint32_t kScreenFilters[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+const char* const kScreenFilterNames[] = {"OFF",  "CRT LIGHT", "CRT STRONG",   "SHARPEN", "VIBRANT",
+                                          "NOIR", "SEPIA",     "NIGHT VISION", "VHS"};
 constexpr uint32_t kAudioOutputs[] = {audio::kOutputAuto, audio::kOutputMono, audio::kOutputStereo,
                                       audio::kOutputSurround};
 const char* const kAudioOutputNames[] = {"AUTOMATIC", "MONO", "2.0 STEREO", "5.1 SURROUND"};
@@ -226,7 +232,8 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kInvertMouse, kWalkSpeed, kFov, kViewmodelFov, kHoldAim, kDrawDistance, kAudioOutput, kLanguage,
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
-             kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity };
+             kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity,
+             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps };
 
 using rows::Kind;
 using rows::Row;
@@ -238,6 +245,7 @@ constexpr Row kGraphicsRows[] = {
     {Kind::Value, kFov, "FIELD OF VIEW"},
     {Kind::Value, kViewmodelFov, "VIEWMODEL FIELD OF VIEW"},
     {Kind::Value, kFmvScale, "FMV SCALE"},
+    {Kind::Value, kScreenFilter, "SCREEN FILTER"},
     {Kind::Heading, -1, "PERFORMANCE"},
     {Kind::Value, kVsync, "VERTICAL SYNC"},
     {Kind::Value, kMaxFps, "MAX FRAME RATE"},
@@ -258,7 +266,12 @@ constexpr Row kTouchRows[] = {
     {Kind::Heading, -1, "MOTION CONTROLS"},
     {Kind::Value, kGyro, "GYROSCOPE"},
     {Kind::Value, kGyroSensitivity, "GYRO SENSITIVITY"},
-    {Kind::Heading, -1, "CONTROLLER"},
+    {Kind::Value, kGyroInvertX, "GYRO INVERT X"},
+    {Kind::Value, kGyroInvertY, "GYRO INVERT Y"},
+};
+
+// on the game's control setup page, under its own rows
+constexpr Row kControllerRows[] = {
     {Kind::Value, kLeftDeadzone, "LEFT STICK DEADZONE"},
     {Kind::Value, kRightDeadzone, "RIGHT STICK DEADZONE"},
     {Kind::Value, kLeftSensitivity, "LEFT STICK SENSITIVITY"},
@@ -286,6 +299,8 @@ constexpr Row kCheatRows[] = {
     {Kind::Value, kOneHitKill, "ONE-HIT KILL"},
     {Kind::Heading, -1, "GAME"},
     {Kind::Value, kGameSpeed, "GAME SPEED"},
+    {Kind::Value, kUnlockLevels, "UNLOCK ALL MISSIONS"},
+    {Kind::Value, kUnlockBlackOps, "UNLOCK BLACK OPS"},
 };
 
 const std::vector<Row>& InputRows() {
@@ -319,6 +334,8 @@ bool* ToggleFlag(Settings& s, int id) {
         case kGodMode: return &o.god_mode;
         case kOneHitKill: return &o.one_hit_kill;
         case kInfiniteGrenades: return &o.infinite_grenades;
+        case kUnlockLevels: return &o.unlock_levels;
+        case kUnlockBlackOps: return &o.unlock_black_ops;
         default: return nullptr;
     }
 }
@@ -346,6 +363,10 @@ bool StepDisplayRow(int id, int step, Settings& s, char (&text)[64]) {
         }
         case kFmvScale:
             std::snprintf(text, sizeof(text), "%s", kFmvScaleNames[StepTable(kFmvScales, o.fmv_scale, step)]);
+            return true;
+        case kScreenFilter:
+            std::snprintf(text, sizeof(text), "%s",
+                          kScreenFilterNames[StepTable(kScreenFilters, o.screen_filter, step)]);
             return true;
         case kFov:
             if (step) o.fov = uint32_t(StepRange(int(o.fov), kFovMin, kFovMax, 1, step));
@@ -465,6 +486,15 @@ void StepInputRow(int id, int step, char (&text)[64]) {
             if (step) gyro::SetSensitivity(float(StepRange(int(std::lround(gyro::Sensitivity() * 10.0f)), 1, 50, 1, step)) / 10.0f);
             std::snprintf(text, sizeof(text), "%.1f", gyro::Sensitivity());
             break;
+        case kGyroInvertX:
+        case kGyroInvertY: {
+            // kept with the gyro's other settings in android.toml, so not one of ToggleFlag's
+            bool x = gyro::InvertX(), y = gyro::InvertY();
+            if (step) (id == kGyroInvertX ? x : y) ^= true;
+            if (step) gyro::SetInvert(x, y);
+            std::snprintf(text, sizeof(text), "%s", OnOff(id == kGyroInvertX ? x : y));
+            break;
+        }
         case kLeftDeadzone:
         case kRightDeadzone: {
             // 0% to 50% of the stick's travel in steps of 1, 0 leaves the game's own
@@ -539,6 +569,8 @@ void RestoreDefaults(int page) {
         o.god_mode = none.god_mode;
         o.one_hit_kill = none.one_hit_kill;
         o.infinite_grenades = none.infinite_grenades;
+        o.unlock_levels = none.unlock_levels;
+        o.unlock_black_ops = none.unlock_black_ops;
         Changed();
         return;
     }
@@ -566,6 +598,8 @@ void RestoreDefaults(int page) {
     o.god_mode = keep.god_mode;
     o.one_hit_kill = keep.one_hit_kill;
     o.infinite_grenades = keep.infinite_grenades;
+    o.unlock_levels = keep.unlock_levels;
+    o.unlock_black_ops = keep.unlock_black_ops;
     Changed();
 }
 
@@ -662,15 +696,23 @@ void KeyRow(const Row& r) {
     g_capture_armed = false;
 }
 
-void DrawRows(int page) {
-    size_t count = 0;
-    const Row* list = rows::Page(page, &count);
+void DrawList(const Row* list, size_t count) {
     for (size_t i = 0; i < count; i++) {
         const Row& r = list[i];
         if (r.kind == Kind::Heading) Section(r.label);
         else if (r.kind == Kind::Value) ValueRow(r);
         else KeyRow(r);
     }
+}
+
+// the touch controls page ends with the sticks', which the game's options show on its control setup page
+void DrawRows(int page) {
+    size_t count = 0;
+    const Row* list = rows::Page(page, &count);
+    DrawList(list, count);
+    if (page != kTouchPage) return;
+    Section("CONTROLLER");
+    DrawList(kControllerRows, std::size(kControllerRows));
 }
 
 void Defaults() {
@@ -816,6 +858,11 @@ const rows::Row* rows::Page(int page, size_t* count) {
     }
     *count = std::size(kGraphicsRows);
     return kGraphicsRows;
+}
+
+const rows::Row* rows::Controller(size_t* count) {
+    *count = std::size(kControllerRows);
+    return kControllerRows;
 }
 
 std::string rows::Value(const Row& row, int step) {

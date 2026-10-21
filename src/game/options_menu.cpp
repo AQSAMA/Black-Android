@@ -3,7 +3,8 @@
 // copies of a stock button clip, its name, its value and an arrow each side of the value; the name's copy stands in
 // for the script's button object, so the cursor works, and a tap on an arrow steps the value as the dpad does. Up and
 // down move the focus here, over the groups' headings, and arrows over and under the rows show more are hidden. The
-// pause menu's options have room for one button, its rows start with the panel's PAGE row.
+// pause menu's options have room for one button, its rows start with the panel's PAGE row. The control setup page
+// keeps its own buttons and takes the sticks' rows under them, in its ring.
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -83,7 +84,7 @@ struct Host {
     float drop;
     const char* first;         // the first and last button objects of its ring
     const char* last;
-    int entries;               // our buttons; one opens both pages
+    int entries;               // our buttons; one opens both pages, none puts the sticks' rows under its own
     // the rows, from the stock button
     float pitch;
     float name_x;
@@ -104,6 +105,9 @@ constexpr Host kHosts[] = {
       "InvertLookOff_Text", "Vibration", "VibrationOn_Text", "VibrationOff_Text", "SFXVolume", "Sound_Volume",
       "MusicVolume", "Music_Volume"},
      {1.4f, 343.55f, 443.55f, 168.35f}},
+    // the bar taken from the page as it first rests
+    {"ControllerSetup", "TextAnim", "_level4.Main.TextAnim.Vibration_Text", "ManuallyConfigure_Text", 25.0f,
+     "toggleCrouchButton", "manuallyConfigureButton", 0, 25.0f, 0.0f, 215.0f, 1.0f, nullptr, {}, {}},
 };
 
 // a text the page shows from here: its string id, the text, the data of the field showing it
@@ -142,6 +146,9 @@ struct Page {
     std::vector<const Row*> rows;  // null restores the defaults
     int capture = 0;  // a key binding: 1 the keys come up, 2 the next key binds or Escape leaves, 3 they come up again
     size_t bind = 0;  // its row
+    bool extra = false;  // the sticks' rows under the page's own buttons
+    Bar bar{};           // the page's own bar, read once it rests, where the host has none
+    bool bar_seen = false;
 };
 Page g_page;     // game thread
 int g_next = 0;  // the mode of the page being loaded
@@ -206,8 +213,10 @@ void Follow(const Page& p) {
         std::memcpy(HostPtr(clip + flash::kClipColours), HostPtr(p.lead + flash::kClipColours), flash::kColoursSize);
     };
     for (int i = 0; i < kEntries; i++) follow(p.entry[i], 0.0f, h.drop + h.pitch * float(i));
+    // the sticks' rows go under the stock clip, the others in its place
+    float top = p.extra ? h.drop : 0.0f;
     for (int i = 0; i < kSlots; i++) {
-        float y = h.pitch * float(i);
+        float y = top + h.pitch * float(i);
         follow(p.name[i], h.name_x, y);
         follow(p.arrow[0][i], h.value_x, y);
         follow(p.value[i], h.value_x + kArrowSpace, y);
@@ -259,9 +268,9 @@ void Fill(Page& p) {
     p.rows.clear();
     if (p.host->entries == 1) p.rows.push_back(&kPageRow);
     size_t count = 0;
-    const Row* list = app::rows::Page(p.mode - 1, &count);
+    const Row* list = p.extra ? app::rows::Controller(&count) : app::rows::Page(p.mode - 1, &count);
     for (size_t i = 0; i < count; i++) p.rows.push_back(&list[i]);
-    if (app::rows::Restorable(p.mode - 1)) p.rows.push_back(nullptr);
+    if (!p.extra && app::rows::Restorable(p.mode - 1)) p.rows.push_back(nullptr);
     p.slots = std::min(p.slots, p.rows.size());
     p.top = 0;
 }
@@ -325,6 +334,46 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
     Set(ctx, menu, "mfuncFunctionBack", 0);
     Set(ctx, menu, "mstrPageBack", String(ctx, h.page));
     Focus(ctx, p.name[std::min(FirstRow(p), p.slots - 1)]);
+    return true;
+}
+
+// the sticks' rows under the page's own buttons, between its last and its first in their ring; all of them show
+bool Extras(X86Context& ctx, uint32_t root, uint32_t holder) {
+    Page& p = g_page;
+    const Host& h = *p.host;
+    uint32_t top = Member(ctx, root, h.first);
+    uint32_t above = Member(ctx, root, h.last);
+    // the last is a plain button, the others choose among values
+    uint32_t nothing = Method(ctx, above, "Select");
+    p.lead = Member(ctx, holder, h.under);
+    if (!top || !above || !nothing || !flash::IsClip(p.lead)) return false;
+    p.extra = true;
+    p.slots = kSlots;
+    Fill(p);
+    for (size_t i = 0; i < p.slots; i++) {
+        char name[16];
+        std::snprintf(name, sizeof(name), "RC_N%d", int(i));
+        p.name[i] = Copy(ctx, holder, name, kDepth + int(i));
+        name[3] = 'V';
+        p.value[i] = Copy(ctx, holder, name, kDepth + kSlots + int(i));
+        name[3] = 'L';
+        p.arrow[0][i] = Copy(ctx, holder, name, kDepth + 2 * kSlots + int(i));
+        name[3] = 'R';
+        p.arrow[1][i] = Copy(ctx, holder, name, kDepth + 3 * kSlots + int(i));
+        if (!p.name[i] || !p.value[i] || !p.arrow[0][i] || !p.arrow[1][i]) return false;
+        if (!Show(ctx, kName + int(i), p.name[i]) || !Show(ctx, kValue + int(i), p.value[i])) return false;
+        for (int side = 0; side < 2; side++)
+            if (!Show(ctx, (side ? kRight : kLeft) + int(i), p.arrow[side][i], nullptr, " ")) return false;
+    }
+    p.first = p.name[0];
+    Follow(p);
+    CallGuest(ctx, flash::kRunActions, {R32(flash::kPlayer)});
+    for (size_t i = 0; i < p.slots; i++) {
+        // a confirm on a button with no action is a back
+        if (!Button(ctx, p.name[i], above) || !Set(ctx, p.name[i], "actionSelectFunction", nothing)) return false;
+        Link(ctx, i ? p.name[i - 1] : above, p.name[i]);
+    }
+    Link(ctx, p.name[p.slots - 1], top);
     return true;
 }
 
@@ -402,14 +451,35 @@ bool Steppable(const Row* row) {
     return row && row->kind == app::rows::Kind::Value && app::rows::Enabled(*row) && !app::rows::Opens(*row);
 }
 
-// the bar on the focused row reaches past the values, its ends and line as stock
-void StretchBar(X86Context& ctx, const Page& p, uint32_t root, uint32_t focus) {
-    const Bar& stock = p.host->bar;
+// the stock bar as it rests, read from its parts
+Bar ReadBar(uint32_t bar) {
+    Bar stock{};
+    int left = 256;
+    for (uint32_t part = flash::FirstChild(bar); part && left; part = R32(part + flash::kClipNext), left--) {
+        int depth = flash::Depth(part);
+        if (depth == kBarBox) stock.box = G<float>(part + flash::kClipScaleX);
+        if (depth == kBarLine) stock.line = G<float>(part + flash::kClipX);
+        if (depth == kBarTick) stock.tick = G<float>(part + flash::kClipX);
+        if (depth == kBarScan) stock.scan = G<float>(part + flash::kClipX);
+    }
+    return stock;
+}
+
+// the bar on the focused row reaches past the values, its ends and line as stock; on a stock row of a page with
+// the sticks' rows it is the stock bar again
+void StretchBar(X86Context& ctx, Page& p, uint32_t root, uint32_t focus, bool ours) {
     uint32_t bar = Member(ctx, Member(ctx, root, "Main"), "ButtonSelector");
     if (flash::Type(bar) != flash::kSprite) return;
     uint32_t data = R32(bar + flash::kClipData);
     if (!data || data == flash::kNoData || R32(data + flash::kDataFrame) != kBarRest) return;
-    float right = std::max(stock.tick, Reach(ctx, p, focus));
+    if (p.extra && !p.bar_seen) {
+        if (ours) return;
+        p.bar = ReadBar(bar);
+        p.bar_seen = p.bar.tick > kBarLeft;
+        return;
+    }
+    const Bar& stock = p.extra ? p.bar : p.host->bar;
+    float right = ours ? std::max(stock.tick, Reach(ctx, p, focus)) : stock.tick;
     float stretch = (right - kBarLeft) / (stock.tick - kBarLeft);
     int left = 256;
     for (uint32_t part = flash::FirstChild(bar); part && left; part = R32(part + flash::kClipNext), left--) {
@@ -444,6 +514,13 @@ void Build(X86Context& ctx, const Host& host, uint32_t root, uint32_t holder, ui
     p = {};
     for (Field& f : g_fields) f.data = 0;
     p.host = &host;
+    if (!host.entries) {
+        // its rows as a mode of their own: the cursor and the taps on arrows find them as the pages' rows
+        p.mode = 1;
+        p.failed = !Extras(ctx, root, holder);
+        LOGI("options menu: %s, controller rows%s", host.page, p.failed ? ", failed" : "");
+        return;
+    }
     p.mode = g_next;
     g_next = 0;
     p.failed = !(p.mode ? Rows(ctx, root, holder, menu) : Entries(ctx, root, holder));
@@ -527,7 +604,8 @@ void UpdateRow(X86Context& ctx, uint32_t ui, size_t slot, uint32_t id, bool clea
     if (clear) Clear(ctx, row);
     bool value = row && row->kind == app::rows::Kind::Value;
     bool locked = row && !app::rows::Enabled(*row);  // greyed in the panel
-    bool edge = UpdateScroll(ctx, slot, id);
+    // the sticks' rows are in the page's ring, its script moves the focus over them
+    bool edge = !g_page.extra && UpdateScroll(ctx, slot, id);
     if (edge) {
         W32(ui + kMenuInput, 0);
     } else {
@@ -544,7 +622,7 @@ void UpdateTexts(X86Context& ctx, Page& p) {
     constexpr float kArrowGap = 4.0f;
     const Host& h = *p.host;
     uint32_t font = CallGuest(ctx, kFindFont, {R32(kGame), kFontName});
-    Write(g_fields[kTitle], app::Ui(kCaptions[p.mode - 1]));
+    if (!p.extra) Write(g_fields[kTitle], app::Ui(kCaptions[p.mode - 1]));
     for (size_t i = 0; i < p.slots; i++) {
         const Row* row = p.rows[p.top + i];
         std::string value = ValueText(p, p.top + i);
@@ -618,7 +696,7 @@ void Tick(X86Context& ctx, uint32_t ui) {
     }
     UpdateTexts(ctx, p);
     Follow(p);
-    if (slot < p.slots) StretchBar(ctx, p, root, focus);
+    if (slot < p.slots || p.extra) StretchBar(ctx, p, root, focus, slot < p.slots);
 }
 
 }  // namespace

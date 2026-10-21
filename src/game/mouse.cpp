@@ -32,9 +32,10 @@ constexpr uint32_t kControllerPitch = 0x1C;
 constexpr uint32_t kControllerAimWanted = 0x45;
 constexpr uint32_t kControllerAimHeld = 0x104;
 
-// esi the player's controller, xmm2 the zoom scale. The game adds the stick, clamps the pitch and wraps the yaw
-// after this.
+// esi the player's controller, xmm2 the zoom scale, kept for the touch controls' scope zoom. The game adds the stick,
+// clamps the pitch and wraps the yaw after this.
 void MouseLook(X86Context& ctx, uint8_t*) {
+    game::g_zoom = ctx.xmm[2].f[0];
     float dx;
     float dy;
     if (!input::TakeMouse(dx, dy)) return;

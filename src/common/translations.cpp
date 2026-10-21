@@ -51,6 +51,15 @@ constexpr Entry kEntries[] = {
     {"VERTICAL SYNC", {u"Synchro verticale", u"V-Sync", u"Sincronia verticale", u"Sincronismo vertical", u"Sinkronisasi vertikal"}},
     {"FMV SCALE", {u"Échelle des cinématiques", u"Videoskalierung", u"Scala dei filmati", u"Escala de vídeos", u"Skala video"}},
     {"FILL", {u"Remplir", u"Füllen", u"Riempi", u"Rellenar", u"Penuh"}},
+    {"SCREEN FILTER", {u"Filtre d'écran", u"Bildfilter", u"Filtro schermo", u"Filtro de pantalla", u"Filter layar"}},
+    {"CRT LIGHT", {u"CRT léger", u"CRT leicht", u"CRT leggero", u"CRT ligero", u"CRT ringan"}},
+    {"CRT STRONG", {u"CRT fort", u"CRT stark", u"CRT forte", u"CRT fuerte", u"CRT kuat"}},
+    {"SHARPEN", {u"Netteté", u"Schärfen", u"Nitidezza", u"Nitidez", u"Pertajam"}},
+    {"VIBRANT", {u"Éclatant", u"Lebendig", u"Vivace", u"Vívido", u"Cerah"}},
+    {"NOIR", {u"Noir", u"Noir", u"Noir", u"Noir", u"Noir"}},
+    {"SEPIA", {u"Sépia", u"Sepia", u"Seppia", u"Sepia", u"Sepia"}},
+    {"NIGHT VISION", {u"Vision nocturne", u"Nachtsicht", u"Visione notturna", u"Visión nocturna", u"Penglihatan malam"}},
+    {"VHS", {u"VHS", u"VHS", u"VHS", u"VHS", u"VHS"}},
     {"HDR OUTPUT", {u"Sortie HDR", u"HDR-Ausgabe", u"Uscita HDR", u"Salida HDR", u"Keluaran HDR"}},
     {"MAX FRAME RATE", {u"Images par seconde max.", u"Max. Bildrate", u"Frame rate massimo", u"Fotogramas por segundo máx.", u"Frame rate maks."}},
     {"FPS COUNTER", {u"Compteur d'images par seconde", u"FPS-Anzeige", u"Contatore FPS", u"Contador de FPS", u"Penghitung FPS"}},
@@ -68,6 +77,8 @@ constexpr Entry kEntries[] = {
     {"EDIT CONTROLS POSITION", {{}, {}, {}, {}, u"Ubah posisi kontrol"}},
     {"GYROSCOPE", {{}, {}, {}, {}, u"Giroskop"}},
     {"GYRO SENSITIVITY", {{}, {}, {}, {}, u"Sensitivitas giroskop"}},
+    {"GYRO INVERT X", {{}, {}, {}, {}, u"Balik sumbu X giroskop"}},
+    {"GYRO INVERT Y", {{}, {}, {}, {}, u"Balik sumbu Y giroskop"}},
     {"LEFT STICK DEADZONE", {u"Zone morte du stick gauche", u"Totzone linker Stick", u"Zona morta levetta sinistra", u"Zona muerta del stick izquierdo", u"Zona mati stik kiri"}},
     {"RIGHT STICK DEADZONE", {u"Zone morte du stick droit", u"Totzone rechter Stick", u"Zona morta levetta destra", u"Zona muerta del stick derecho", u"Zona mati stik kanan"}},
     {"LEFT STICK SENSITIVITY", {u"Sensibilité du stick gauche", u"Empfindlichkeit linker Stick", u"Sensibilità levetta sinistra", u"Sensibilidad del stick izquierdo", u"Sensitivitas stik kiri"}},
@@ -80,6 +91,8 @@ constexpr Entry kEntries[] = {
     {"GOD MODE", {u"Invincibilité", u"Unverwundbarkeit", u"Invincibilità", u"Invencibilidad", u"Mode dewa"}},
     {"ONE-HIT KILL", {u"Mort en un coup", u"Ein-Treffer-Kill", u"Uccisione con un colpo", u"Muerte de un golpe", u"Sekali tembak mati"}},
     {"GAME SPEED", {u"Vitesse du jeu", u"Spielgeschwindigkeit", u"Velocità di gioco", u"Velocidad del juego", u"Kecepatan game"}},
+    {"UNLOCK ALL MISSIONS", {u"Débloquer toutes les missions", u"Alle Missionen freischalten", u"Sblocca tutte le missioni", u"Desbloquear todas las misiones", u"Buka semua misi"}},
+    {"UNLOCK BLACK OPS", {u"Débloquer Black Ops", u"Black Ops freischalten", u"Sblocca Black Ops", u"Desbloquear Black Ops", u"Buka Black Ops"}},
 
     // their values
     {"FULLSCREEN", {u"Plein écran", u"Vollbild", u"Schermo intero", u"Pantalla completa", u"Layar penuh"}},
@@ -165,6 +178,9 @@ constexpr Entry kEntries[] = {
     {"RESET", {{}, {}, {}, {}, u"Atur ulang"}},
     {"CANCEL", {{}, {}, {}, {}, u"Batal"}},
     {"DONE", {{}, {}, {}, {}, u"Selesai"}},
+    {"HIDE", {{}, {}, {}, {}, u"Sembunyikan"}},
+    {"SHOW", {{}, {}, {}, {}, u"Tampilkan"}},
+    {"TAP A CONTROL, THEN HIDE OR SHOW", {{}, {}, {}, {}, u"Ketuk kontrol, lalu sembunyikan atau tampilkan"}},
     {"DRAG A CONTROL TO MOVE IT", {{}, {}, {}, {}, u"Seret kontrol untuk memindahkannya"}},
 };
 
