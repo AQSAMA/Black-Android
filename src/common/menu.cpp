@@ -22,6 +22,7 @@
 #include "common/mouse_keyboard.h"
 #include "common/options.h"
 #include "common/translations.h"
+#include "game/weapons.h"
 
 // native/gyro.cpp: aiming by turning the phone
 namespace gyro {
@@ -715,6 +716,40 @@ void DrawRows(int page) {
     DrawList(kControllerRows, std::size(kControllerRows));
 }
 
+// under the cheats, the level's weapons as buttons (weapons.cpp: any weapon in any level); the one given goes in the
+// slot not in hand and the game switches to it
+void DrawWeapons() {
+    weapons::View v = weapons::Current();
+    Section("GIVE A WEAPON");
+    if (!v.in_level) {
+        ImGui::PushStyleColor(ImGuiCol_Text, kDim);
+        ImGui::TextWrapped("%s", Ui("Start or continue a level to choose its weapons.", false).c_str());
+        ImGui::PopStyleColor();
+        return;
+    }
+    constexpr int kColumns = 3;
+    float gap = ImGui::GetStyle().ItemSpacing.x;
+    float w = (ImGui::GetContentRegionAvail().x - gap * (kColumns - 1)) / kColumns;
+    for (size_t i = 0; i < v.choices.size(); i++) {
+        const weapons::Choice& c = v.choices[i];
+        if (i % kColumns) ImGui::SameLine();
+        ImGui::PushID(c.type);
+        if (c.held) ImGui::PushStyleColor(ImGuiCol_Text, kHeading);  // in one of the two slots now
+        if (ImGui::Button(c.label.c_str(), ImVec2(w, 0))) weapons::Give(c.type);
+        if (c.held) ImGui::PopStyleColor();
+        ImGui::PopID();
+    }
+    Section("AMMUNITION");
+    if (ImGui::Button(Ui("FILL AMMUNITION").c_str(), ImVec2(w, 0))) weapons::FillAmmo();
+    if (!v.status.empty()) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, kDim);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(v.status.c_str());
+        ImGui::PopStyleColor();
+    }
+}
+
 void Defaults() {
     g_capture = -1;
     RestoreDefaults(g_page);
@@ -766,6 +801,7 @@ void DrawFooter(float em) {
     const char* hint = "";
     if (g_capture >= 0) hint = "Press a key or mouse button to bind, Escape cancels";
     else if (g_page == kKeyboardPage && g_hovered_box >= 0) hint = "Right click or Delete clears the key";
+    else if (g_page == kCheatsPage) hint = "A weapon replaces the one not in hand, gold names are held";
     ImGui::TextUnformatted(Ui(hint, false).c_str());
     ImGui::PopStyleColor();
     float bw = em * 8;
@@ -795,6 +831,7 @@ void DrawPanel() {
         ImGui::BeginChild("##rows", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
         g_hovered_box = -1;
         DrawRows(g_page);
+        if (g_page == kCheatsPage) DrawWeapons();
         ImGui::EndChild();
         DrawFooter(em);
     }
