@@ -234,18 +234,41 @@ void WaitForGame() {
     }
 }
 
-bool AskOtherRelease(const fs::path& name) {
+// the xbes of other releases the player chose to always start, one sha1 a line, so the question is not asked again
+fs::path AllowedFile() { return ExeDir() / "other_releases.txt"; }
+
+bool AllowedRelease(const std::string& sha) {
+    std::ifstream f(AllowedFile());
+    for (std::string line; std::getline(f, line);)
+        if (line == sha) return true;
+    return false;
+}
+
+void AllowRelease(const std::string& sha) {
+    std::ofstream f(AllowedFile(), std::ios::app);
+    f << sha << "\n";
+    if (!f) LOGW("game: %s cannot be written", AllowedFile().string().c_str());
+}
+
+bool AskOtherRelease(const fs::path& name, const std::string& sha) {
+    if (AllowedRelease(sha)) {
+        LOGR("Game: another release, started without asking as the player chose");
+        return true;
+    }
     std::string text = name.filename().string() +
                        " is a different release of the game than this build was made from, and will most likely "
                        "crash.\n\nStart it anyway?";
     const SDL_MessageBoxButtonData buttons[] = {
         {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "No"},
         {0, 1, "Yes"},
+        {0, 2, "Yes, don't ask again"},
     };
     std::string title = Utf8(kGame.short_title);
-    SDL_MessageBoxData box{SDL_MESSAGEBOX_WARNING, nullptr, title.c_str(), text.c_str(), 2, buttons, nullptr};
+    SDL_MessageBoxData box{SDL_MESSAGEBOX_WARNING, nullptr, title.c_str(), text.c_str(), 3, buttons, nullptr};
     int answer = 0;
-    return SDL_ShowMessageBox(&box, &answer) && answer == 1;
+    if (!SDL_ShowMessageBox(&box, &answer)) return false;
+    if (answer == 2) AllowRelease(sha);
+    return answer >= 1;
 }
 
 // 1 found, 0 none there, -1 the player turned down another release
@@ -254,6 +277,7 @@ int Search(GameFiles& game) {
     GameFiles other;
     std::unique_ptr<kernel::Disc> other_disc;
     fs::path other_name;
+    std::string other_sha;
     auto consider = [&](const fs::path& assets, const fs::path& name, std::vector<uint8_t> xbe,
                         std::unique_ptr<kernel::Disc> disc) {
         std::string sha = Sha1(xbe);
@@ -273,6 +297,7 @@ int Search(GameFiles& game) {
             other = {assets, std::move(xbe)};
             other_disc = std::move(disc);
             other_name = name;
+            other_sha = sha;
         }
         return false;
     };
@@ -306,7 +331,7 @@ int Search(GameFiles& game) {
     }
 
     if (other_name.empty()) return 0;
-    if (!AskOtherRelease(other_name)) return -1;
+    if (!AskOtherRelease(other_name, other_sha)) return -1;
     game = std::move(other);
     kernel::MountDisc(std::move(other_disc));
     return 1;
