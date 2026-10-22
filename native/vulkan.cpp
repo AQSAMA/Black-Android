@@ -16,6 +16,7 @@
 #include <fstream>
 #include <map>
 #include <mutex>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -542,6 +543,7 @@ struct DrawTextures {
     float k[4] = {1, 1, 1, 1};
     float wide[4] = {};
     bool blur[4] = {};
+    uint32_t gw[4] = {};  // a render target's guest width, 0 for any other texture
 };
 
 struct DrawShaders {
@@ -751,8 +753,9 @@ void KeyRasterizer(const State& s, const Assembled& a, PsoKey& k) {
 
 constexpr float kAlphaTestAlways = 7.0f;
 
+// FOG off leaves the constants as fog disabled: the shaders' fog factor is then 1, the colour as drawn
 void FillFogConstants(const State& s, DrawConstants& c) {
-    if (!s.rs[kRsFogEnable]) return;
+    if (!s.rs[kRsFogEnable] || !game::Opt().fog) return;
     c.fog[0] = Bits(s.rs[kRsFogStart]);
     c.fog[1] = Bits(s.rs[kRsFogEnd]);
     c.fog[2] = Bits(s.rs[kRsFogDensity]);
@@ -1076,6 +1079,7 @@ private:
     void EnsurePixelShader(const PixelKey& pk, DrawShaders& sh);
     bool BindStageTextures(const State& s, DrawTextures& stages);
     VkImageView BindTexture(const State& s, int stage, DrawTextures& stages);
+    bool GlowComposite(const State& s, const DrawTextures& stages) const;
     VkImageView BindTargetTexture(const State& s, int stage, const TextureDesc& d, Target& t, bool box,
                                   DrawTextures& stages);
     VkImageView BindGuestTexture(const State& s, int stage, const TextureDesc& d, const FormatInfo& fi,
@@ -2576,6 +2580,7 @@ VkImageView VulkanBackend::BindTargetTexture(const State& s, int stage, const Te
     if (&t == draw_ds_) return VK_NULL_HANDLE;
     bool feedback = &t == draw_rt_;
     stages.rt[stage] = true;
+    stages.gw[stage] = t.depth ? 0 : t.gw;
     if (!t.depth && LatchCpuWrite(t)) {
         Surface su;
         su.header = s.textures[size_t(stage)];
@@ -2696,6 +2701,7 @@ VkImageView VulkanBackend::BindTexture(const State& s, int stage, DrawTextures& 
     TexInfo& info = stages.info[stage];
     info = {};
     stages.rt[stage] = false;
+    stages.gw[stage] = 0;
     stages.k[stage] = 1;
     stages.wide[stage] = 0;
     stages.fmt[stage] = kBgra;
@@ -2767,6 +2773,26 @@ void VulkanBackend::BuildPipelineKey(const State& s, const Assembled& a, const D
     KeyRasterizer(s, a, k);
 }
 
+// the glow's last step: a render target at most half the frame's width added (blend ONE onto the frame) over a
+// full size target. BLOOM off skips it, the glow passes before it then go unseen. A composite done any other way
+// (one pass mixing both, alpha blended) is left alone, so the frame never goes black for it
+bool VulkanBackend::GlowComposite(const State& s, const DrawTextures& stages) const {
+    constexpr uint32_t kBlendOne = 1;
+    if (!draw_rt_ || draw_rt_->gw < guest_w_ || !SimpleState(s, kMBlendEnable) || SimpleState(s, kMDestBlend) != kBlendOne)
+        return false;
+    for (int i = 0; i < 4; i++) {
+        if (!stages.gw[i] || stages.gw[i] * 2 > draw_rt_->gw) continue;
+        // each kind once in the log, to tell what it took
+        static std::set<uint64_t> seen;
+        uint64_t kind = uint64_t(stages.gw[i]) << 32 | SimpleState(s, kMSrcBlend) << 16 | draw_rt_->gw;
+        if (seen.size() < 16 && seen.insert(kind).second)
+            LOGR("vulkan: bloom off skips %u wide onto %u wide, src blend %u", stages.gw[i], draw_rt_->gw,
+                 SimpleState(s, kMSrcBlend));
+        return true;
+    }
+    return false;
+}
+
 void VulkanBackend::Draw(const State& s, uint32_t prim, uint32_t start, uint32_t count, const uint8_t* indices) {
     if (DepthCopy(s)) return;
     Assembled& a = asm_;
@@ -2788,6 +2814,7 @@ void VulkanBackend::Draw(const State& s, uint32_t prim, uint32_t start, uint32_t
 
     DrawTextures stages;
     if (!BindStageTextures(s, stages) || !draw_rt_ && !draw_ds_) return;
+    if (!game::Opt().bloom && GlowComposite(s, stages)) return;
     PixelKey pk = MakePixelKey(s, stages.info);
     sh.pkey = Hash(&pk, sizeof(pk));
     EnsurePixelShader(pk, sh);

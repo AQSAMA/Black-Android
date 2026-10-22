@@ -19,6 +19,8 @@ struct Options {
     // 7 night vision, 8 VHS
     uint32_t screen_filter = 0;
     bool reload_blur = true;
+    bool bloom = true;  // the glow added over bright parts of the frame (native/vulkan.cpp)
+    bool fog = true;
     uint32_t draw_distance = 1;  // times the game's LOD and draw distances
     float mouse_sensitivity = 1.0f;
     float touch_sensitivity = 1.0f;  // the touch screen's look, apart from the mouse's

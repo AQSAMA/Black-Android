@@ -236,7 +236,8 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
              kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity,
-             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin, kCredit };
+             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin, kCredit, kBloom,
+             kFog };
 
 using rows::Kind;
 using rows::Row;
@@ -257,6 +258,8 @@ constexpr Row kGraphicsRows[] = {
     {Kind::Value, kAniso, "ANISOTROPIC FILTERING"},
     {Kind::Value, kDrawDistance, "DRAW DISTANCE"},
     {Kind::Value, kReloadBlur, "RELOAD BLUR"},
+    {Kind::Value, kBloom, "BLOOM"},
+    {Kind::Value, kFog, "FOG"},
 };
 
 constexpr Row kTouchRows[] = {
@@ -369,6 +372,8 @@ bool* ToggleFlag(Settings& s, int id) {
         case kVsync: return &s.vsync;
         case kFpsCounter: return &o.fps_counter;
         case kReloadBlur: return &o.reload_blur;
+        case kBloom: return &o.bloom;
+        case kFog: return &o.fog;
         case kSkipIntros: return &o.skip_intros;
         case kInvertMouse: return &o.invert_mouse;
         case kHoldAim: return &o.hold_aim;

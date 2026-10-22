@@ -92,6 +92,8 @@ const app::GameInfo app::kGame = {
     .options = {{"skip_intros", &game::Opt().skip_intros, nullptr},
                 {"fps_counter", &game::Opt().fps_counter, nullptr},
                 {"reload_blur", &game::Opt().reload_blur, nullptr},
+                {"bloom", &game::Opt().bloom, nullptr},
+                {"fog", &game::Opt().fog, nullptr},
                 {"fmv_scale", nullptr, &game::Opt().fmv_scale},
                 {"screen_filter", nullptr, &game::Opt().screen_filter},
                 {"invert_mouse", &game::Opt().invert_mouse, nullptr},
