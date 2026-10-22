@@ -15,6 +15,7 @@
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -32,6 +33,7 @@
 #include "common/menu.h"
 #include "common/options.h"
 #include "common/translations.h"
+#include "core/log.h"
 #include "host.h"
 
 namespace input {
@@ -638,8 +640,15 @@ std::atomic<uint64_t> g_touch_ms{0};
 std::atomic<uint64_t> g_back_until{0};  // the back key's tap of Start or B lasts until then
 constexpr uint64_t kBackTapMs = 120;
 
+// the buttons' look: drawn as before, or the images of the skin bagasromadon made (issue #14), with the Xbox
+// controller's letters or without
+enum Skin : uint32_t { kClassic, kXbox, kClean, kSkins };
+constexpr const char* kSkinIds[] = {"classic", "xbox", "clean"};
+constexpr const char* kSkinNames[] = {"CLASSIC", "XBOX", "CLEAN"};
+
 // the layout in use, under g_lock
 Layout g_layout = kTwoFinger;
+uint32_t g_skin = kXbox;
 size_t g_preset = 0;
 float g_opacity = 0.85f;
 float g_scale = 1.0f;  // every control's size, on top of its own
@@ -674,6 +683,9 @@ void LoadLayout() {
         g_layout = *kPresets[g_preset].places;
         g_opacity = std::clamp(float(t["opacity"].value_or(double(g_opacity))), 0.2f, 1.0f);
         g_scale = std::clamp(float(t["scale"].value_or(double(g_scale))), 0.5f, 1.5f);
+        std::string skin = t["skin"].value_or(std::string(kSkinIds[g_skin]));
+        for (uint32_t i = 0; i < kSkins; i++)
+            if (skin == kSkinIds[i]) g_skin = i;
         for (size_t i = 0; i <= kButtonCount; i++) {
             // the menus' controls are not in the editor: always the preset's
             if (i != kStick && kButtons[i].when == When::Menus) continue;
@@ -698,7 +710,7 @@ void SaveLayout() {
                         toml::table{{"x", double(p.x)}, {"y", double(p.y)}, {"r", double(p.r)}, {"hidden", p.hidden}});
     }
     toml::table t{{"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"scale", double(g_scale)},
-                  {"controls", controls}};
+                  {"skin", kSkinIds[g_skin]}, {"controls", controls}};
     std::ofstream(LayoutFile()) << t << "\n";
 }
 
@@ -1325,6 +1337,51 @@ void DrawIcon(const Pen& p, Icon icon) {
 // a colour at the layout's opacity
 ImU32 Fade(int r, int g, int b, int a) { return IM_COL32(r, g, b, int(float(a) * g_opacity)); }
 
+// ---- the skins' images: one atlas, tools/make_skin.py's cells in SkinPart's order, the Xbox set then the clean one.
+// Each image is a cell wide and sits at its bottom, so a button's circle is the cell's width across
+
+enum SkinPart : int { kFire, kAim, kMode, kReload, kCrouch, kMelee, kUse, kGrenade, kWeapon, kHealth, kObjectives,
+                      kPause, kGyroPart, kBackPart, kSuppressor, kStickBase, kStickKnob, kSkinParts, kNoPart = -1 };
+constexpr float kSkinCellW = 192, kSkinCellH = 209;
+constexpr int kSkinColumns = 6;
+constexpr const char* kSkinFile = "skins/buttons.png";  // in the APK's assets
+ImTextureID g_skin_texture = nullptr;  // render thread
+float g_skin_w = 1, g_skin_h = 1;      // the atlas, pixels
+constexpr ImU32 kSkinInk = IM_COL32(178, 190, 170, 255);  // the skin's light grey green, for the icons it has none of
+
+SkinPart PartOf(Icon icon) {
+    switch (icon) {
+        case Icon::Bullet: return kFire;
+        case Icon::Scope: return kAim;
+        case Icon::Mode: return kMode;
+        case Icon::Reload: return kReload;
+        case Icon::Crouch: return kCrouch;
+        case Icon::Knife: return kMelee;
+        case Icon::Hand: return kUse;
+        case Icon::Grenade: return kGrenade;
+        case Icon::Swap: return kWeapon;
+        case Icon::Health: return kHealth;
+        case Icon::Map: return kObjectives;
+        case Icon::Pause: return kPause;
+        case Icon::Gyro: return kGyroPart;
+        case Icon::Back: return kBackPart;
+        case Icon::Suppressor: return kSuppressor;
+        default: return kNoPart;
+    }
+}
+
+// the skin's images in use: not CLASSIC, and the atlas loaded
+bool Skinned() { return g_skin != kClassic && g_skin_texture; }
+
+// a part of the skin in use, its circle of radius r about c
+void SkinImage(ImDrawList* dl, SkinPart part, ImVec2 c, float r, ImU32 tint) {
+    int i = int(g_skin == kClean ? kSkinParts : 0) + part;
+    float u = float(i % kSkinColumns) * kSkinCellW, v = float(i / kSkinColumns) * kSkinCellH;
+    float top = c.y + r - 2 * r * kSkinCellH / kSkinCellW;
+    dl->AddImage(g_skin_texture, ImVec2(c.x - r, top), ImVec2(c.x + r, c.y + r), ImVec2(u / g_skin_w, v / g_skin_h),
+                 ImVec2((u + kSkinCellW) / g_skin_w, (v + kSkinCellH) / g_skin_h), tint);
+}
+
 void DrawStick(ImDrawList* dl, float th) {
     // at rest in its place, else where the thumb came down
     float r = Radius(kStick);
@@ -1335,6 +1392,14 @@ void DrawStick(ImDrawList* dl, float th) {
             at = ImVec2(f.x0, f.y0);
             held = true;
         }
+    if (Skinned()) {
+        // the ring with its arrows is the knob, about seven tenths of the base; it travels half the base's radius
+        constexpr float kKnob = 0.72f, kTravel = 0.5f;
+        SkinImage(dl, kStickBase, at, r, Fade(255, 255, 255, held ? 200 : 150));
+        ImVec2 knob(at.x + g_stick_x * r * kTravel, at.y - g_stick_y * r * kTravel);
+        SkinImage(dl, kStickKnob, knob, r * kKnob, Fade(255, 255, 255, held ? 255 : 200));
+        return;
+    }
     dl->AddCircleFilled(at, r, Fade(0, 0, 0, held ? 80 : 55), 64);
     dl->AddCircle(at, r, Fade(255, 255, 255, held ? 110 : 70), 64, th * 0.7f);
     for (int i = 0; i < 4; i++) {  // the four directions
@@ -1397,9 +1462,23 @@ void Draw() {
         bool hidden = g_layout[i].hidden;
         bool on = !editing && (g_pressed[i] || (b.press == kGyro && gyro::CurrentMode() != gyro::kOff));
         int fade = hidden ? 40 : 100;  // a hidden control shows faint in the editor
-        dl->AddCircleFilled(ImVec2(cx, cy), r, on ? Fade(255, 255, 255, 70) : Fade(0, 0, 0, 80 * fade / 100), 48);
-        dl->AddCircle(ImVec2(cx, cy), r, Fade(255, 255, 255, 60 * fade / 100), 48, th * 0.6f);
-        DrawIcon({dl, ImVec2(cx, cy), r, on ? Fade(255, 255, 255, 230) : Fade(255, 255, 255, 180 * fade / 100), th}, b.icon);
+        if (Skinned()) {
+            // pressed in a little and lit; the icons the skin has none of (the menus' arrows, the scope's zoom) drawn
+            // on its plain circle in its colours
+            float k = on ? 0.92f : 1.0f;
+            ImU32 tint = Fade(255, 255, 255, on ? 255 : 215 * fade / 100);
+            SkinPart part = PartOf(b.icon);
+            SkinImage(dl, part == kNoPart ? kStickBase : part, ImVec2(cx, cy), r * k, tint);
+            if (part == kNoPart) {
+                ImU32 ink = (kSkinInk & ~IM_COL32_A_MASK) | (tint & IM_COL32_A_MASK);
+                DrawIcon({dl, ImVec2(cx, cy), r * k * 0.8f, ink, th * 1.4f}, b.icon);
+            }
+        } else {
+            dl->AddCircleFilled(ImVec2(cx, cy), r, on ? Fade(255, 255, 255, 70) : Fade(0, 0, 0, 80 * fade / 100), 48);
+            dl->AddCircle(ImVec2(cx, cy), r, Fade(255, 255, 255, 60 * fade / 100), 48, th * 0.6f);
+            DrawIcon({dl, ImVec2(cx, cy), r, on ? Fade(255, 255, 255, 230) : Fade(255, 255, 255, 180 * fade / 100), th},
+                     b.icon);
+        }
         if (b.press == kGyro) {
             const char* mode = gyro::ModeName();
             float fs = r * 0.55f;
@@ -1487,6 +1566,40 @@ void StepSize(int step) {
     g_scale = float(std::clamp(int(Percent(g_scale)) + step * 5, 50, 150)) / 100.0f;
     SaveLayout();
 }
+
+const char* SkinName() {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    return kSkinNames[g_skin];
+}
+
+void StepSkin(int step) {
+    std::lock_guard lock(g_lock);
+    EnsureLayout();
+    g_skin = (g_skin + (step > 0 ? 1 : kSkins - 1)) % kSkins;
+    SaveLayout();
+}
+
+bool LoadSkin(std::vector<uint8_t>& rgba, uint32_t& w, uint32_t& h) {
+    SDL_Surface* png = SDL_LoadPNG(kSkinFile);
+    SDL_Surface* s = png ? SDL_ConvertSurface(png, SDL_PIXELFORMAT_ABGR8888) : nullptr;  // R G B A in memory
+    SDL_DestroySurface(png);
+    if (!s) {
+        LOGE("touch: %s: %s", kSkinFile, SDL_GetError());
+        return false;
+    }
+    w = uint32_t(s->w);
+    h = uint32_t(s->h);
+    rgba.resize(size_t(w) * h * 4);
+    for (uint32_t y = 0; y < h; y++)
+        std::memcpy(&rgba[size_t(y) * w * 4], static_cast<const uint8_t*>(s->pixels) + size_t(y) * s->pitch, size_t(w) * 4);
+    SDL_DestroySurface(s);
+    g_skin_w = float(w);
+    g_skin_h = float(h);
+    return true;
+}
+
+void SetSkinTexture(uint64_t texture) { g_skin_texture = reinterpret_cast<ImTextureID>(uintptr_t(texture)); }
 
 // the controls over the screen to drag where they go, Done or Cancel in the bar at the top, Android's back cancels
 void EditLayout() {

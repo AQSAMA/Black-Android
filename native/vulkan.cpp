@@ -1092,6 +1092,7 @@ private:
     void DrawFrame(Target* t, uint32_t index);
     void RenderUi();
     void UploadGammaRamp();
+    void UploadSkin();
     void ReleaseOldTextures();
     void ApplySettings();
     void SavePipelineCache();
@@ -1172,6 +1173,8 @@ private:
     bool ui_ = false;
     uint8_t ramp_[768] = {};
     bool ramp_dirty_ = false;
+    Image skin_;  // the touch controls' button skins (touch.cpp), made once
+    bool skin_tried_ = false;
     bool gamma_ = false;
     Target* draw_rt_ = nullptr;
     Target* draw_ds_ = nullptr;
@@ -3214,6 +3217,29 @@ void VulkanBackend::UploadGammaRamp() {
     Transition(lut_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
+// the touch controls' skins as an ImGui texture; without them the controls keep their drawn icons
+void VulkanBackend::UploadSkin() {
+    skin_tried_ = true;
+    std::vector<uint8_t> rgba;
+    uint32_t w = 0, h = 0;
+    if (!ui_ || !touch::LoadSkin(rgba, w, h)) return;
+    constexpr VkImageUsageFlags kSampled = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if (!CreateImage(skin_, VK_FORMAT_R8G8B8A8_UNORM, w, h, 1, 1, 1, kSampled, VK_IMAGE_VIEW_TYPE_2D)) return;
+    Alloc a = Upload(rgba.size(), 16);
+    if (!a.cpu) {
+        Destroy(skin_);
+        return;
+    }
+    std::memcpy(a.cpu, rgba.data(), rgba.size());
+    Transition(skin_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VkBufferImageCopy c{a.off, 0, 0, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0, 0, 0}, {w, h, 1}};
+    vkCmdCopyBufferToImage(Cb(), a.buf, skin_.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &c);
+    Transition(skin_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    std::lock_guard lock(app::UiLock());
+    VkDescriptorSet set = ImGui_ImplVulkan_AddTexture(linear_, skin_.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    touch::SetSkinTexture(uint64_t(reinterpret_cast<uintptr_t>(set)));
+}
+
 void VulkanBackend::ReleaseOldTextures() {
     constexpr uint64_t kSweepEvery = 60;
     constexpr size_t kTexturesKept = 1024;  // a phone has less memory than a PC: fewer kept
@@ -3263,6 +3289,7 @@ void VulkanBackend::Present(const Surface& front) {
     Target* t = EnsureTarget(front, false);
     if (t && LatchCpuWrite(*t)) UploadTarget(*t, front);
     if (ramp_dirty_) UploadGammaRamp();
+    if (!skin_tried_) UploadSkin();
     uint32_t index = 0;
     bool shown = AcquireImage(index);
     if (shown) {

@@ -45,6 +45,8 @@ void StepOpacity(int step);
 uint32_t ControlsSize();
 void StepSize(int step);
 void EditLayout();
+const char* SkinName();
+void StepSkin(int step);
 }  // namespace touch
 
 // native/update.cpp: the activity asks GitHub for a newer release and says what it found
@@ -234,7 +236,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
              kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity,
-             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps };
+             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin };
 
 using rows::Kind;
 using rows::Row;
@@ -263,6 +265,7 @@ constexpr Row kTouchRows[] = {
     {Kind::Value, kTouchLayout, "CONTROLS LAYOUT"},
     {Kind::Value, kTouchOpacity, "CONTROLS OPACITY"},
     {Kind::Value, kTouchSize, "CONTROLS SIZE"},
+    {Kind::Value, kTouchSkin, "BUTTON STYLE"},
     {Kind::Value, kTouchEdit, "EDIT CONTROLS POSITION"},
     {Kind::Heading, -1, "MOTION CONTROLS"},
     {Kind::Value, kGyro, "GYROSCOPE"},
@@ -471,6 +474,10 @@ void StepInputRow(int id, int step, char (&text)[64]) {
         case kTouchSize:
             if (step) touch::StepSize(step);
             std::snprintf(text, sizeof(text), "%u%%", touch::ControlsSize());
+            break;
+        case kTouchSkin:
+            if (step) touch::StepSkin(step);
+            std::snprintf(text, sizeof(text), "%s", touch::SkinName());
             break;
         case kTouchEdit:
             // any step opens the editor over the screen
