@@ -142,6 +142,7 @@ struct Page {
     float right_x[kSlots] = {};      // the right arrow's place, past its row's value
     uint32_t more[2] = {};           // the scroll arrows, up and down
     size_t slots = 0;
+    size_t made = 0;  // the row clips made: a page the PAGE row turns to shows at most these, the rest blank
     size_t top = 0;
     std::vector<const Row*> rows;  // null restores the defaults
     int capture = 0;  // a key binding: 1 the keys come up, 2 the next key binds or Escape leaves, 3 they come up again
@@ -271,7 +272,7 @@ void Fill(Page& p) {
     const Row* list = p.extra ? app::rows::Controller(&count) : app::rows::Page(p.mode - 1, &count);
     for (size_t i = 0; i < count; i++) p.rows.push_back(&list[i]);
     if (!p.extra && app::rows::Restorable(p.mode - 1)) p.rows.push_back(nullptr);
-    p.slots = std::min(p.slots, p.rows.size());
+    p.slots = std::min(p.made ? p.made : p.slots, p.rows.size());
     p.top = 0;
 }
 
@@ -291,6 +292,7 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
     p.lead = Member(ctx, holder, std::strrchr(h.button, '.') + 1);
     if (!nothing || !flash::IsClip(p.lead)) return false;
     p.slots = kSlots;
+    p.made = 0;
     Fill(p);
     for (size_t i = 0; i < p.slots; i++) {
         char name[16];
@@ -319,6 +321,7 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
         G<float>(p.more[side] + flash::kClipScaleX) = h.scale * kMoreScale;
         G<float>(p.more[side] + flash::kClipScaleY) = h.scale * kMoreScale;
     }
+    p.made = p.slots;
     p.first = p.name[0];
     Follow(p);
     CallGuest(ctx, flash::kRunActions, {R32(flash::kPlayer)});
@@ -349,6 +352,7 @@ bool Extras(X86Context& ctx, uint32_t root, uint32_t holder) {
     if (!top || !above || !nothing || !flash::IsClip(p.lead)) return false;
     p.extra = true;
     p.slots = kSlots;
+    p.made = 0;
     Fill(p);
     for (size_t i = 0; i < p.slots; i++) {
         char name[16];
@@ -365,6 +369,7 @@ bool Extras(X86Context& ctx, uint32_t root, uint32_t holder) {
         for (int side = 0; side < 2; side++)
             if (!Show(ctx, (side ? kRight : kLeft) + int(i), p.arrow[side][i], nullptr, " ")) return false;
     }
+    p.made = p.slots;
     p.first = p.name[0];
     Follow(p);
     CallGuest(ctx, flash::kRunActions, {R32(flash::kPlayer)});
@@ -639,6 +644,9 @@ void UpdateTexts(X86Context& ctx, Page& p) {
         float scale = h.scale * G<float>(from + flash::kClipScaleX);
         p.right_x[i] = h.value_x + kArrowSpace + (kTextLeft + Measure(font, value) * kTextHeight) * scale + kArrowGap;
     }
+    // a shorter page than the one the clips were made for: the rest show nothing, not the last page's rows
+    for (size_t i = p.slots; i < p.made; i++)
+        for (int field : {kName, kValue, kLeft, kRight}) Write(g_fields[field + i], " ");
     Write(g_fields[kScroll], p.top > 0 ? kMore[0] : " ");
     Write(g_fields[kScroll + 1], p.top + p.slots < p.rows.size() ? kMore[1] : " ");
 }
