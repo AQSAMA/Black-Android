@@ -20,7 +20,9 @@ import org.json.JSONObject;
 // newer than the one installed and the player has not skipped it, and from the options menu, where the answer is
 // given whatever it is.
 final class UpdateChecker {
-    static final String REPO = "RanggaCasper/Black-Android";
+    // personal build: its own repository, which publishes nothing, so the original developer's releases (and their APK)
+    // are never offered here; this app is a separate application id and is updated only from these builds
+    static final String REPO = "AQSAMA/Black-Android";
     private static final String LATEST = "https://api.github.com/repos/" + REPO + "/releases/latest";
     private static final String TAG = "BlackUpdate";
     private static final int TIMEOUT_MS = 8000;
