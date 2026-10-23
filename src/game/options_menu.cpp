@@ -1,5 +1,5 @@
 // Recomp settings in the game's own options menus: a button a page (GRAPHICS, TOUCH CONTROLS, GENERAL, MOUSE AND
-// KEYBOARD, CHEATS) under the stock ones loads the page again with the F10 panel's rows in their place. A row is four
+// KEYBOARD; the cheats are the panel's alone) under the stock ones loads the page again with the F10 panel's rows in their place. A row is four
 // copies of a stock button clip, its name, its value and an arrow each side of the value; the name's copy stands in
 // for the script's button object, so the cursor works, and a tap on an arrow steps the value as the dpad does. Up and
 // down move the focus here, over the groups' headings, and arrows over and under the rows show more are hidden. The
@@ -39,8 +39,8 @@ using flash::Text;
 namespace {
 
 constexpr uint32_t kHashTable = 0x2AC908;
-// as menu.cpp's pages
-const char* const kCaptions[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD", "CHEATS"};
+// as menu.cpp's pages, but for the cheats: those are in the panel the touch controls' gear button opens
+const char* const kCaptions[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD"};
 constexpr int kEntries = int(std::size(kCaptions));
 constexpr int kSlots = 8;
 constexpr int kDepth = 100;

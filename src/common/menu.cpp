@@ -1,4 +1,4 @@
-// the options panel on F10
+// the cheats panel, on the touch controls' gear button or F10
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -558,9 +558,7 @@ std::string KeyText(std::string keys) {
     return keys;
 }
 
-// as options_menu.cpp's captions
-const char* const kPages[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD", "CHEATS"};
-constexpr int kSettingsPage = 0;
+// as options_menu.cpp's pages: 0 graphics
 constexpr int kTouchPage = 1;
 constexpr int kGeneralPage = 2;
 constexpr int kKeyboardPage = 3;
@@ -617,7 +615,7 @@ int g_capture_slot = 0;  // its box: 0 the key, 1 the alternate
 int g_hovered_box = -1;  // the box under the mouse or focused with a key in it, this frame
 bool g_capture_armed = false;
 int g_capture_done = 0;  // frame of the last bind, the key that bound must not start another
-int g_page = kSettingsPage;
+int g_page = kCheatsPage;
 // the action's key and its alternate as their boxes show them, the alternate blank when there is none
 std::vector<std::string> KeyBoxes(size_t action) {
     std::string keys = input::Binding(action);
@@ -762,40 +760,10 @@ void Defaults() {
     RestoreDefaults(g_page);
 }
 
-// one tab a page, as wide as they share the line; LB / RB step them
-void DrawTabs() {
-    int step = ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) - ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false);
-    // a selection made here shows from the next frame, the tab drawn this one still reads as selected
-    bool set = step && CaptureFree();
-    int pages = int(std::size(kPages));
-    if (set) g_page = StepIndex(g_page, step, pages);
-    ImGui::PushStyleColor(ImGuiCol_Tab, kTab);
-    ImGui::PushStyleColor(ImGuiCol_TabHovered, kTabHovered);
-    ImGui::PushStyleColor(ImGuiCol_TabSelected, kHighlight);
-    ImGui::PushStyleColor(ImGuiCol_TabSelectedOverline, kHeading);
-    ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 0.0f);
-    if (ImGui::BeginTabBar("##pages")) {
-        float gaps = ImGui::GetStyle().ItemInnerSpacing.x * float(pages - 1);
-        float w = (ImGui::GetContentRegionAvail().x - gaps) / float(pages);
-        for (int i = 0; i < pages; i++) {
-            ImGui::SetNextItemWidth(w);
-            std::string tab = Ui(kPages[i]) + "###" + kPages[i];
-            if (ImGui::BeginTabItem(tab.c_str(), nullptr, set && i == g_page ? ImGuiTabItemFlags_SetSelected : 0)) {
-                if (!set && i != g_page) {
-                    g_page = i;
-                    g_capture = -1;
-                }
-                ImGui::EndTabItem();
-            }
-        }
-        ImGui::EndTabBar();
-    }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(4);
-}
-
+// the panel is the cheats alone, the touch button's way to them in play; every other setting is in the game's own
+// options menu
 void DrawTitle() {
-    std::string title = Ui("SETTINGS");
+    std::string title = Ui("CHEATS");
     float title_pad = (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(title.c_str()).x) * 0.5f;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(title_pad, 0.0f));
     ImGui::TextUnformatted(title.c_str());
@@ -833,7 +801,7 @@ void DrawPanel() {
                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar;
     if (ImGui::Begin("##settings", nullptr, kFlags)) {
         DrawTitle();
-        DrawTabs();
+        ImGui::Separator();
         float footer = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + em;
         ImGui::BeginChild("##rows", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
         g_hovered_box = -1;

@@ -514,8 +514,9 @@ enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag, Pinch };
 enum : int { kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
 constexpr int kBit = 8;  // kBit + n: buttons bit n (dpad up down left right, start, back, left thumb, right thumb)
 enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right, Zoom };
-// Play while the player has the controls, Game outside the menus (cutscenes too), Menus in the menus and options
-enum class When : uint8_t { Play, Menus, Game };
+// Play while the player has the controls, Game outside the menus (cutscenes too), Menus in the menus and options,
+// Always in both
+enum class When : uint8_t { Play, Menus, Game, Always };
 struct Button {
     const char* id;     // its key in layout.toml
     const char* label;  // in the layout editor
@@ -549,6 +550,8 @@ constexpr Button kButtons[] = {
     {"dpad_down", "Down", Icon::Down, kBit + 1, When::Menus},
     {"dpad_left", "Left", Icon::Left, kBit + 2, When::Menus},
     {"dpad_right", "Right", Icon::Right, kBit + 3, When::Menus},
+    // the settings panel over the game, where its cheats give any weapon; a tap again closes it
+    {"panel", "Panel", Icon::Gear, kPanel, When::Always},
     // the firing mode's button again, beside use while a scope is up: the scope's level, X2 or X5, and a tap switches
     {"zoom", "Scope zoom", Icon::Zoom, kBit + 0, When::Play},
 };
@@ -572,6 +575,7 @@ constexpr Layout kTwoFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.581f, 0.07f, 0.04f},
     {0.715f, 0.40f, 0.05f},
     {0.108f, 0.70f, 0.12f},
 }};
@@ -583,6 +587,7 @@ constexpr Layout kThreeFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.581f, 0.07f, 0.04f},
     {0.69f, 0.40f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
@@ -594,6 +599,7 @@ constexpr Layout kFourFinger = {{
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
     {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
+    {0.581f, 0.07f, 0.04f},
     {0.655f, 0.38f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
@@ -733,6 +739,7 @@ bool ButtonShown(size_t i) {
     if (g_editing) return b.when != When::Menus;
     if (g_layout[i].hidden) return false;
     if (i == kZoomButton && !(game::g_zoom < kScoped)) return false;
+    if (b.when == When::Always) return true;
     if (b.when == When::Game) return !InMenus();
     if (b.when == When::Menus) return InMenus();
     // in play only while the player has the controls: none over a loading screen or a cutscene. A hint's pause stops
