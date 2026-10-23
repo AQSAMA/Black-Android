@@ -151,11 +151,14 @@ struct Page {
     bool extra = false;  // the sticks' rows under the page's own buttons
     Bar bar{};           // the page's own bar, read once it rests, where the host has none
     bool bar_seen = false;
+    std::string back;  // the credits: the title menu that opened them, their back
 };
 Page g_page;     // game thread
 int g_next = 0;  // the mode of the page being loaded
 int g_last = 0;  // the mode before it, whose button takes the focus back
-std::string g_credits_back;  // the title menu that opened the credits, the page they go back to; empty for none
+// the title menu whose CREDITS was chosen, until the options page it goes to takes it; empty for none. Taken once,
+// as the page is built: left set, the next OPTIONS would open the credits too
+std::string g_credits_back;
 
 uint32_t Hash(const char* text) { return flash::StringId(text); }
 
@@ -332,8 +335,8 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
     Show(ctx, kTitle, holder, "$FE_OPTIONS");
     // back is the options page, not its own back; the credits go back to the title menu
     Set(ctx, menu, "mfuncFunctionBack", 0);
-    bool credits = p.mode == kCreditsMode && !g_credits_back.empty();
-    Set(ctx, menu, "mstrPageBack", String(ctx, credits ? g_credits_back.c_str() : h.page));
+    bool credits = p.mode == kCreditsMode && !p.back.empty();
+    Set(ctx, menu, "mstrPageBack", String(ctx, credits ? p.back.c_str() : h.page));
     Focus(ctx, p.name[std::min(FirstRow(p), p.slots - 1)]);
     return true;
 }
@@ -514,6 +517,8 @@ const Host* FindHost(const char* name) {
 // the page's clips made again: the stock buttons and ours, or the rows of the mode asked for
 void Build(X86Context& ctx, const Host& host, uint32_t root, uint32_t holder, uint32_t menu) {
     Page& p = g_page;
+    // the credits made again stay the credits
+    std::string back = p.mode == kCreditsMode ? p.back : std::string();
     p = {};
     for (Field& f : g_fields) f.data = 0;
     p.host = &host;
@@ -526,7 +531,8 @@ void Build(X86Context& ctx, const Host& host, uint32_t root, uint32_t holder, ui
     }
     p.mode = g_next;
     g_next = 0;
-    if (!g_credits_back.empty() && !p.mode) p.mode = kCreditsMode;
+    p.back = g_credits_back.empty() ? back : std::exchange(g_credits_back, {});
+    if (!p.back.empty() && !p.mode) p.mode = kCreditsMode;
     p.failed = !(p.mode ? Rows(ctx, root, holder, menu) : Entries(ctx, root, holder));
     const char* shown = p.mode ? kCaptions[p.mode - 1] : "buttons";
     LOGI("options menu: %s, %s%s", host.page, shown, p.failed ? ", failed" : "");
@@ -659,8 +665,6 @@ void Tick(X86Context& ctx, uint32_t ui) {
     bool running = host && R32(flash::kPlayerReady) == 1 && R32(flash::kPlayer) && R32(ui + kPageReady) == kPageRunning;
     if (!running) {
         if (*name && !host) g_next = g_last = 0;
-        // the credits' way back is spent once they are left for a page not the options page
-        if (*name && !host && p.mode == kCreditsMode) g_credits_back.clear();
         p = {};
         return;
     }
