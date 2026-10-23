@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -276,6 +277,11 @@ private fun GameCanvas(
     val widthPx = with(density) { width.toPx() }
     val heightPx = with(density) { height.toPx() }
     val scale = layout.scale / 100f
+    // a drag lasts across recompositions: the callbacks and placement are read through the latest state, and its
+    // position is measured once from the down point rather than from the layout captured when the gesture started
+    val latestLayout by rememberUpdatedState(layout)
+    val latestOnSelect by rememberUpdatedState(onSelect)
+    val latestOnMove by rememberUpdatedState(onMove)
 
     Surface(
         modifier = Modifier
@@ -307,7 +313,7 @@ private fun GameCanvas(
                     ControlGroup.Menus -> menuPreview
                 }
                 if (visibleInMode) true else showHidden
-            }.sortedBy { it.id == selectedId }
+            }
 
             shown.forEach { control ->
                 val place = layout.placeOrDefault(control.id)
@@ -355,21 +361,19 @@ private fun GameCanvas(
                         .pointerInput(control.id, widthPx, heightPx, scale) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
-                                onSelect(control.id)
-                                var last = down.position
+                                latestOnSelect(control.id)
+                                val start = latestLayout.placeOrDefault(control.id)
                                 do {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     if (change.pressed) {
-                                        val delta = change.position - last
-                                        last = change.position
-                                        if (delta != Offset.Zero) {
+                                        val total = change.position - down.position
+                                        if (total != Offset.Zero) {
                                             change.consume()
-                                            val p = layout.placeOrDefault(control.id)
-                                            onMove(
+                                            latestOnMove(
                                                 control.id,
-                                                p.x + delta.x / widthPx,
-                                                p.y + delta.y / heightPx,
+                                                start.x + total.x / widthPx,
+                                                start.y + total.y / heightPx,
                                             )
                                         }
                                     }

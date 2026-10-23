@@ -31,6 +31,7 @@ fun AboutScreen(
     prefs: InterfacePreferences,
     update: UpdateState,
     version: String,
+    settings: GameSettings,
 ) {
     SettingsPage {
         item {
@@ -117,7 +118,7 @@ fun AboutScreen(
                     subtitle = "Sends black.toml, android.toml and layout.toml as readable text. Useful in a bug report.",
                     button = "Share",
                     icon = Icons.Rounded.Share,
-                    onClick = { host.shareSettings(host.settingsStore.load()) },
+                    onClick = { host.shareSettings(settings) },
                 )
                 DividerInset()
                 ActionSetting(
@@ -125,7 +126,7 @@ fun AboutScreen(
                     subtitle = "Writes the same snapshot to a file you can copy off the phone.",
                     button = "Export",
                     icon = Icons.Rounded.Description,
-                    onClick = { host.exportSettings(host.settingsStore.load()) },
+                    onClick = { host.exportSettings(settings) },
                 )
             }
         }

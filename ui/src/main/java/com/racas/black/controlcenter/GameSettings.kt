@@ -201,7 +201,8 @@ object Options {
     val drawDistances = listOf(1, 2, 4, 8)
     val anisotropic = listOf(0, 2, 4, 8, 16)
     val fpsCaps = listOf(30, 60, 75, 90, 120, 144, 165, 240, 360, 1, 0)
-    val audioOutputs = listOf("Automatic", "Mono", "2.0 Stereo", "5.1 Surround")
+    // src/audio/output.h: kOutputAuto 0, kOutputStereo 1, kOutputSurround 2, kOutputMono 3
+    val audioOutputs = listOf("Automatic", "2.0 Stereo", "5.1 Surround", "Mono")
     val gyroModes = listOf("Off", "Always", "While firing")
     val languages = listOf(
         "int" to "English",

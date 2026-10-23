@@ -35,5 +35,8 @@ black.toml
 .vscode/
 .idea/
 
+# Kotlin tooling session data
+/.kotlin/
+
 # Local temporary folder
 .local

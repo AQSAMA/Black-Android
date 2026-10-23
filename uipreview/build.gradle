@@ -13,18 +13,30 @@ android {
         minSdk 29
         targetSdk 34
         versionCode project.hasProperty("versionCode") ? project.versionCode.toInteger() : 1
-        versionName project.hasProperty("versionName") ? project.versionName : "2.0-preview"
+        versionName project.hasProperty("versionName") ? project.versionName : "2.1-preview"
     }
 
-    // the preview is installable beside the game; a release key if the workflow has one, a debug signature otherwise
-    def keystore = System.getenv("BLACK_KEYSTORE")
+    // the preview is installable beside the game; a release key if the workflow has one, a debug signature otherwise.
+    // Tagged releases set BLACK_REQUIRE_SIGNING: an unsigned release would get a different runner key every time and
+    // could not update an installed preview, so the build fails instead.
+    def requireSigning = System.getenv("BLACK_REQUIRE_SIGNING") == "true"
+    def keystorePath = System.getenv("BLACK_KEYSTORE")
+    def storePass = System.getenv("BLACK_KEYSTORE_PASSWORD")
+    def alias = System.getenv("BLACK_KEY_ALIAS")
+    def aliasPassword = System.getenv("BLACK_KEY_PASSWORD")
+    if (requireSigning && !(keystorePath && storePass && alias && aliasPassword)) {
+        throw new GradleException(
+            "BLACK_REQUIRE_SIGNING is set but BLACK_KEYSTORE, BLACK_KEYSTORE_PASSWORD, BLACK_KEY_ALIAS and " +
+                "BLACK_KEY_PASSWORD are not all present",
+        )
+    }
     signingConfigs {
-        if (keystore) {
+        if (keystorePath) {
             release {
-                storeFile file(keystore)
-                storePassword System.getenv("BLACK_KEYSTORE_PASSWORD")
-                keyAlias System.getenv("BLACK_KEY_ALIAS")
-                keyPassword System.getenv("BLACK_KEY_PASSWORD")
+                storeFile file(keystorePath)
+                storePassword storePass
+                keyAlias alias
+                keyPassword aliasPassword
             }
         }
     }
@@ -45,7 +57,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig keystore ? signingConfigs.release : signingConfigs.debug
+            signingConfig keystorePath ? signingConfigs.release : signingConfigs.debug
         }
     }
 }

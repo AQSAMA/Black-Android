@@ -1,6 +1,9 @@
 package com.racas.black.controlcenter
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -42,12 +45,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -57,6 +62,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -89,6 +97,25 @@ fun BlackControlCenter(host: ControlCenterHost) {
         var sectionId by rememberSaveable { mutableStateOf(ControlSection.Home.id) }
         var editingLayout by rememberSaveable { mutableStateOf(false) }
         val section = ControlSection.of(sectionId)
+        val reduceMotion = LocalReduceMotion.current
+        // Back, Play and the system all leave the activity without waiting for the 280 ms save debounce
+        val latestSettings = rememberUpdatedState(settings)
+        val lifecycleOwner = LocalLifecycleOwner.current
+
+        fun flushSettings() {
+            runCatching { host.settingsStore.save(latestSettings.value) }
+        }
+
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) flushSettings()
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                flushSettings()
+            }
+        }
 
         LaunchedEffect(Unit) {
             snapshotFlow { settings }
@@ -155,7 +182,10 @@ fun BlackControlCenter(host: ControlCenterHost) {
                                 actions = {
                                     if (game !is GameStatus.Importing) {
                                         Button(
-                                            onClick = { host.launchGame() },
+                                            onClick = {
+                                                flushSettings()
+                                                host.launchGame()
+                                            },
                                             modifier = Modifier.heightIn(min = 52.dp),
                                             contentPadding = PaddingValues(horizontal = 18.dp),
                                         ) {
@@ -181,48 +211,59 @@ fun BlackControlCenter(host: ControlCenterHost) {
                             .fillMaxSize()
                             .padding(padding),
                     ) {
-                        when (section) {
-                            ControlSection.Home -> HomeScreen(
-                                settings = settings,
-                                prefs = prefs,
-                                game = game,
-                                update = update,
-                                version = host.appVersion,
-                                preview = host.isPreview,
-                                onPlay = { host.launchGame() },
-                                onImport = { uri -> host.importGame(uri) },
-                                onRequestStorage = { host.requestStorageAccess() },
-                                onCheckUpdates = { host.checkForUpdates() },
-                                onOpenUrl = { host.openUrl(it) },
-                                onOpenSection = { sectionId = it.id },
-                            )
-                            ControlSection.Display -> DisplayScreen(
-                                settings = settings,
-                                onSettings = { block -> settings = block(settings) },
-                            )
-                            ControlSection.Controls -> ControlsScreen(
-                                settings = settings,
-                                onSettings = { block -> settings = block(settings) },
-                                onEditLayout = { editingLayout = true },
-                            )
-                            ControlSection.Interface -> InterfaceScreen(
-                                prefs = prefs,
-                                onPrefs = { block -> host.preferencesStore.update(block) },
-                            )
-                            ControlSection.Audio -> AudioScreen(
-                                settings = settings,
-                                onSettings = { block -> settings = block(settings) },
-                            )
-                            ControlSection.Cheats -> CheatsScreen(
-                                settings = settings,
-                                onSettings = { block -> settings = block(settings) },
-                            )
-                            ControlSection.About -> AboutScreen(
-                                host = host,
-                                prefs = prefs,
-                                update = update,
-                                version = host.appVersion,
-                            )
+                        Crossfade(
+                            targetState = section,
+                            modifier = Modifier.fillMaxSize(),
+                            animationSpec = if (reduceMotion) snap() else tween(durationMillis = 180),
+                            label = "section",
+                        ) { current ->
+                            when (current) {
+                                ControlSection.Home -> HomeScreen(
+                                    settings = settings,
+                                    prefs = prefs,
+                                    game = game,
+                                    update = update,
+                                    version = host.appVersion,
+                                    preview = host.isPreview,
+                                    onPlay = {
+                                        flushSettings()
+                                        host.launchGame()
+                                    },
+                                    onImport = { uri -> host.importGame(uri) },
+                                    onRequestStorage = { host.requestStorageAccess() },
+                                    onCheckUpdates = { host.checkForUpdates() },
+                                    onOpenUrl = { host.openUrl(it) },
+                                    onOpenSection = { sectionId = it.id },
+                                )
+                                ControlSection.Display -> DisplayScreen(
+                                    settings = settings,
+                                    onSettings = { block -> settings = block(settings) },
+                                )
+                                ControlSection.Controls -> ControlsScreen(
+                                    settings = settings,
+                                    onSettings = { block -> settings = block(settings) },
+                                    onEditLayout = { editingLayout = true },
+                                )
+                                ControlSection.Interface -> InterfaceScreen(
+                                    prefs = prefs,
+                                    onPrefs = { block -> host.preferencesStore.update(block) },
+                                )
+                                ControlSection.Audio -> AudioScreen(
+                                    settings = settings,
+                                    onSettings = { block -> settings = block(settings) },
+                                )
+                                ControlSection.Cheats -> CheatsScreen(
+                                    settings = settings,
+                                    onSettings = { block -> settings = block(settings) },
+                                )
+                                ControlSection.About -> AboutScreen(
+                                    host = host,
+                                    prefs = prefs,
+                                    update = update,
+                                    version = host.appVersion,
+                                    settings = settings,
+                                )
+                            }
                         }
                     }
                 }

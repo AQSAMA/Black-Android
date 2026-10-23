@@ -19,6 +19,10 @@ bool Foreground();
 uint32_t SurfaceEpoch();
 // the game thread, before a present: returns once the app is in front again
 void WaitForeground();
+// main thread: the Control Center saved its files; the game applies them before its next frame
+void RequestSettingsApply();
+// game thread, at a frame boundary: applies a requested settings reload
+void ApplyPendingSettings();
 // the window's size in pixels
 void WindowPixels(int& w, int& h);
 // the Compose Control Center over the game: its own activity, the game pauses while it is up

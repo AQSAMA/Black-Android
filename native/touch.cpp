@@ -1639,12 +1639,12 @@ const char* LayoutName() {
     return Custom() ? "CUSTOM" : kPresets[g_preset].label;
 }
 
-// after the Control Center wrote layout.toml: the next draw uses the new places, preset, skin and opacity
+// after the Control Center wrote layout.toml: the next draw uses the new places, preset, skin and opacity. The
+// game's own options, including key bindings, are reloaded on the game thread in host::ApplyPendingSettings.
 void ReloadLayout() {
     std::lock_guard lock(g_lock);
     if (g_editing) return;
     LoadLayout();
-    input::LoadBindings();
 }
 
 // the next or previous preset; from a custom layout first back to its own preset's places, or the one before

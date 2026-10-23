@@ -116,7 +116,7 @@ The Control Center can be built as a standalone preview APK, `com.racas.black.pr
 ```
 The APK is at `uipreview/build/outputs/apk/release/uipreview-release.apk`. It runs against demo settings: the screens, theme and layout editor work, but **Play** only explains that the preview does not include the game. It installs beside the full app.
 
-Pushing a tag that starts with `preview-v` runs `.github/workflows/preview.yml`, which builds the APK and publishes it as a prerelease. To sign it with your own key, add the repository secrets `PREVIEW_KEYSTORE_BASE64`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS` and `PREVIEW_KEY_PASSWORD`; without them the workflow produces a debug-signed APK that still installs.
+Pushing a tag that starts with `preview-v` runs `.github/workflows/preview.yml`, which builds the APK and publishes it as a prerelease. Tag releases require all four signing secrets: `PREVIEW_KEYSTORE_BASE64`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS` and `PREVIEW_KEY_PASSWORD`. A manual workflow run without them still produces a debug-signed artifact for testing, but it is not released.
 
 ## Credits
 - [XboxXBE-Recomp](https://github.com/TGP482/XboxXBE-Recomp) by TGP482: the static recompiler and the portable runtime (Xbox kernel, XDK libraries and Direct3D 8) this port is built on.

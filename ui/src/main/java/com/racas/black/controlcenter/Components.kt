@@ -48,11 +48,28 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+/**
+ * The Interface screen's Haptics switch. It returns a tick the controls call on selection, save and a slider release;
+ * with haptics off the call does nothing.
+ */
+@Composable
+fun rememberHapticTick(): () -> Unit {
+    val enabled = LocalHaptics.current
+    val feedback = LocalHapticFeedback.current
+    return remember(enabled, feedback) {
+        {
+            if (enabled) feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+}
 
 @Composable
 fun PageHeader(
@@ -123,11 +140,21 @@ fun SettingRow(
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    val tick = rememberHapticTick()
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable {
+                        tick()
+                        onClick()
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -165,6 +192,7 @@ fun SwitchSetting(
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
 ) {
+    val tick = rememberHapticTick()
     SettingRow(
         title = title,
         subtitle = subtitle,
@@ -172,7 +200,10 @@ fun SwitchSetting(
         trailing = {
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = {
+                    tick()
+                    onCheckedChange(it)
+                },
                 enabled = enabled,
                 modifier = Modifier.scale(1.08f),
             )
@@ -192,6 +223,7 @@ fun SliderSetting(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: (() -> Unit)? = null,
 ) {
+    val tick = rememberHapticTick()
     Column(
         Modifier
             .fillMaxWidth()
@@ -224,7 +256,10 @@ fun SliderSetting(
         Slider(
             value = value,
             onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
+            onValueChangeFinished = {
+                tick()
+                onValueChangeFinished?.invoke()
+            },
             valueRange = range,
             steps = steps,
             enabled = enabled,
@@ -245,6 +280,7 @@ fun SegmentedSetting(
     onSelect: (Int) -> Unit,
     enabled: Boolean = true,
 ) {
+    val tick = rememberHapticTick()
     Column(
         Modifier
             .fillMaxWidth()
@@ -270,7 +306,10 @@ fun SegmentedSetting(
                 val selected = index == selectedIndex
                 if (selected) {
                     Button(
-                        onClick = { onSelect(index) },
+                        onClick = {
+                            tick()
+                            onSelect(index)
+                        },
                         modifier = Modifier
                             .widthIn(min = 88.dp)
                             .heightIn(min = 52.dp),
@@ -281,7 +320,10 @@ fun SegmentedSetting(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = { onSelect(index) },
+                        onClick = {
+                            tick()
+                            onSelect(index)
+                        },
                         modifier = Modifier
                             .widthIn(min = 88.dp)
                             .heightIn(min = 52.dp),
@@ -306,6 +348,7 @@ fun ChoiceSetting(
     enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val tick = rememberHapticTick()
     SettingRow(
         title = title,
         subtitle = subtitle,
@@ -332,6 +375,7 @@ fun ChoiceSetting(
                             text = { Text(label, style = MaterialTheme.typography.bodyLarge) },
                             onClick = {
                                 expanded = false
+                                tick()
                                 onSelect(index)
                             },
                             leadingIcon = {
@@ -355,13 +399,17 @@ fun StepperSetting(
     onIncrease: () -> Unit,
     enabled: Boolean = true,
 ) {
+    val tick = rememberHapticTick()
     SettingRow(
         title = title,
         subtitle = subtitle,
         trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = onDecrease,
+                    onClick = {
+                        tick()
+                        onDecrease()
+                    },
                     enabled = enabled,
                     modifier = Modifier.size(56.dp),
                 ) {
@@ -373,7 +421,10 @@ fun StepperSetting(
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
                 IconButton(
-                    onClick = onIncrease,
+                    onClick = {
+                        tick()
+                        onIncrease()
+                    },
                     enabled = enabled,
                     modifier = Modifier.size(56.dp),
                 ) {
@@ -393,12 +444,16 @@ fun ActionSetting(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val tick = rememberHapticTick()
     SettingRow(
         title = title,
         subtitle = subtitle,
         trailing = {
             Button(
-                onClick = onClick,
+                onClick = {
+                    tick()
+                    onClick()
+                },
                 enabled = enabled,
                 modifier = Modifier.heightIn(min = 52.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp),
@@ -475,11 +530,15 @@ fun InfoBanner(
 
 @Composable
 fun AccentDot(color: Color, selected: Boolean, onClick: () -> Unit) {
+    val tick = rememberHapticTick()
     Surface(
         modifier = Modifier
             .size(if (selected) 56.dp else 48.dp)
             .clip(CircleShape)
-            .clickable(role = Role.RadioButton, onClick = onClick),
+            .clickable(role = Role.RadioButton) {
+                tick()
+                onClick()
+            },
         shape = CircleShape,
         color = color,
         border = if (selected) BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface) else null,
@@ -498,10 +557,20 @@ fun AccentDot(color: Color, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun StatTile(label: String, value: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
+    val tick = rememberHapticTick()
     Surface(
         modifier = modifier
             .clip(MaterialTheme.shapes.medium)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable {
+                        tick()
+                        onClick()
+                    }
+                } else {
+                    Modifier
+                },
+            ),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
         Column(Modifier.padding(16.dp)) {
