@@ -16,8 +16,8 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
 
 ## Installation
 1. Install the APK.
-2. Open **Black Android**. The **Control Center** opens first: allow **all files access** when it asks (on Android 10, the **storage** permission).
-3. Copy the game into `/storage/emulated/0/Black`, or into a `Black` folder at the top of your SD card: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder on the phone's storage once access is allowed, and the Control Center shows the game as ready as soon as it finds the files.
+2. Open **Black Android**. The **Control Center** opens first. The first time it opens, it explains why it needs **all files access** and offers the system page for it (on Android 10 it asks for the **storage** permission instead). Tap **Allow access** there and grant it.
+3. Point the app at the game files. Keep the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders, in `/storage/emulated/0/Black` or in a `Black` folder at the top of your SD card. The Control Center shows the game as ready as soon as it finds the files. You can also tap **Choose game folder** in the Control Center and pick any folder; if it is outside the game folder, the app copies the game files into place. **Import .iso** copies a disc image from Downloads, another folder, a cloud drive or a USB stick.
 4. Tap **Play** to start the game. While playing, the pause menu's **CONTROL CENTER** button brings the settings back over the game.
 
 If you don't grant that access, `Android/data/com.racas.black/files/assets` works too.
@@ -28,9 +28,9 @@ Settings (`black.toml`, `android.toml`, `layout.toml`), saves (`hdd`), logs and 
 The **Control Center** is the app's front end: it opens when you launch Black Android and from **CONTROL CENTER** in the pause menu. It edits the same `black.toml`, `android.toml` and `layout.toml` the renderer reads, and a running game picks the changes up without a restart. Rows, sliders, switches and buttons are sized for touch, and the interface itself is adjustable.
 
 ### Control Center
-- **Overview**: whether the game files were found, importing a disc image or a `default.xbe` folder, **Play**, update checks, and sharing or exporting the settings as TOML.
-- **Display**, **Controls**, **Audio** and **Cheats**: the port's settings gathered under large, plain-language pages, each with its own reset button.
-- **Interface**: OLED black, dark or system theme; eight accent colours; square or round corners; high contrast; interface and text scale; bottom tabs or a side rail on wide screens; haptics, reduced motion and keep-screen-on.
+- **Overview**: whether the game files were found, **Play**, choosing the game folder or importing a disc image, storage access, and sharing or exporting the settings as TOML.
+- **Display**, **Controls** and **Audio**: the port's settings gathered under large, plain-language pages, each with its own reset button. **More** holds **Interface**, **Cheats**, **About** and the update check, keeping the bottom bar to five destinations (a side rail on wide screens).
+- **Interface**: OLED black, dark or system theme; eight accent colours; square or round corners; high contrast; interface and text scale; a bottom bar or a side rail on wide screens; haptics, reduced motion and keep-screen-on.
 - **Layout editor**: a full-screen preview of the touch controls. Drag any control, resize it with a slider or a pinch, hide the ones you do not use, and save the layout back to the game. The optional top-left fire zone is a wide rectangle that can be dragged and resized like the round buttons.
 - **Back and Play** behave as expected: back leaves the Control Center, and the **Play** button in the top bar returns to the game.
 
@@ -114,9 +114,28 @@ The Control Center can be built as a standalone preview APK, `com.racas.black.pr
 ```
 ./gradlew -PpreviewOnly :uipreview:assembleRelease
 ```
-The APK is at `uipreview/build/outputs/apk/release/uipreview-release.apk`. It runs against demo settings: the screens, theme and layout editor work, but **Play** only explains that the preview does not include the game. It installs beside the full app.
+The APK is at `uipreview/build/outputs/apk/release/uipreview-release.apk`. It installs beside the full app and can read the real game folder to show the setup screens with your own files, but **Play** only explains that the preview does not include the game.
 
-Pushing a tag that starts with `preview-v` runs `.github/workflows/preview.yml`, which builds the APK and publishes it as a prerelease. Tag releases require all four signing secrets: `PREVIEW_KEYSTORE_BASE64`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS` and `PREVIEW_KEY_PASSWORD`. A manual workflow run without them still produces a debug-signed artifact for testing, but it is not released.
+### 6. Build and preview from GitHub Actions
+Two workflows build APKs. Neither needs a local toolchain, and both can be started by hand from the **Actions** tab with a branch, tag or commit of your choice.
+
+**UI Preview** (`.github/workflows/preview.yml`) builds the Control Center preview APK on Ubuntu in a few minutes.
+- **Run it by hand:** *Actions → UI Preview → Run workflow*. The `ref` input takes any branch, tag or commit, so a branch does not have to be the repository's default branch and its workflow file does not have to be on that branch. The APK is attached to the run as an **artifact**; download it from the **Artifacts** section at the bottom of the run page.
+- **`release_tag`** updates an existing prerelease (for example `preview-v2.1`) with the new APK and notes instead of only producing an artifact. It only works in the repository that holds that prerelease (the fork `flagencareapp/Black-Android` for `preview-v2.1`); a run in this repository fails the check instead of creating a duplicate. The asset version is taken from the tag, so the old APK is replaced rather than left beside the new one. The `version` input is ignored when `release_tag` is set.
+- **Pull requests** that touch `ui/`, `uipreview/` or the Gradle files build an artifact for the PR head, so an unmerged branch can be tested before merging.
+- **Tags** starting with `preview-v` build and publish/update the matching prerelease automatically.
+
+**Build** (`.github/workflows/build.yml`) builds the full app, with the native renderer and the recompiled game, on a Windows runner.
+- **Run it by hand:** *Actions → Build → Run workflow*, with the same `ref` input. The APK is an artifact of the run; nothing is published. This needs the five secrets below, because the recompiler cannot run without the decrypted `default.xbe`.
+- **Tags** starting with `v` still build and publish the release with `Black-<version>.apk`, as before. The full build needs `XBE_KEY`, which is not configured in this repository, so a manual **Build** run here stops at the XBE step until the secrets below are added; use **UI Preview** to test the interface in the meantime.
+- The **Run workflow** button and the PR trigger both only appear once this workflow file is on the default branch (`main`). A workflow on a feature branch is not listed. Until it is merged, run it from the branch that has it with the GitHub CLI: `gh workflow run preview.yml --repo <owner>/<repo> --ref <branch>`, or push a `preview-v*` tag (tag triggers run from the tag regardless of the default branch).
+
+**Secrets** (`Settings → Secrets and variables → Actions`):
+- UI Preview, for a signed preview: `PREVIEW_KEYSTORE_BASE64`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS`, `PREVIEW_KEY_PASSWORD`. Without them a manual artifact build is debug signed; tag builds and release updates fail instead of replacing a signed preview with a different key.
+- Build, for the full app: `XBE_KEY` (the passphrase of `ci/default.xbe.enc`), `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+
+The preview's `versionCode` is offset above the earlier preview builds (`100000 + run number`), so it installs as an update over the installed preview when signed with the same key. Run numbers only increase inside one repository, so a build from another repository can have a lower code; use one repository for the updates. Code is built from the selected `ref`; a manual run publishes nothing unless `release_tag` asks for it, and a manual run started on a tag publishes nothing (only a tag push does).
+
 
 ## Credits
 - [XboxXBE-Recomp](https://github.com/TGP482/XboxXBE-Recomp) by TGP482: the static recompiler and the portable runtime (Xbox kernel, XDK libraries and Direct3D 8) this port is built on.

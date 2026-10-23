@@ -8,7 +8,7 @@ An unofficial Android (arm64) port of the original Xbox game *Black*, made with 
 
 ## Build
 
-Everything runs on Windows. Requirements: Visual Studio 2022 C++ tools, plus Android SDK Platform 34, NDK `28.2.13676358` and CMake `3.31.6`. Java 17–21 is needed for Gradle 8.7 (`.vscode/settings.json` points to JDK 17). Python is used only to pull the xbe out of an ISO.
+The full app builds only on Windows. Requirements: Visual Studio 2022 C++ tools, plus Android SDK Platform 34, NDK `28.2.13676358` and CMake `3.31.6`. Java 17–21 is needed for Gradle 8.7 (`.vscode/settings.json` points to JDK 17). Python is used only to pull the xbe out of an ISO.
 
 - `build.bat` runs the full pipeline:
   1. Checks the tools.
@@ -23,12 +23,18 @@ Everything runs on Windows. Requirements: Visual Studio 2022 C++ tools, plus And
 - Install: `adb install -r app/build/outputs/apk/release/app-release.apk`. On the device, settings (`black.toml`, `android.toml`, `layout.toml`), saves (`hdd`), logs and the shader cache are in `Android/data/com.racas.black/files`.
 - The first native build compiles 64 partitions of recompiled code and takes 30–90 minutes.
 - `-PxbeGenerated=<dir> -PxbeImage=<file>` makes Gradle build recompiled code from somewhere other than `generated/game`.
+- The Control Center preview APK builds anywhere, without the NDK, Windows or game data: `./gradlew -PpreviewOnly :uipreview:assembleRelease` → `uipreview/build/outputs/apk/release/uipreview-release.apk`.
 
 There are no tests or linters in this repo.
 
 ## CI/CD
 
-`.github/workflows/build.yml` runs only when a `v*` tag is pushed (`git tag v1.2.3 && git push origin v1.2.3`). It runs `build.bat` on a Windows runner and publishes a GitHub Release with `Black-<version>.apk`. The release body comes from `ci/release-notes.md`, with its `{{...}}` placeholders filled in. The xbe is committed only in encrypted form, as `ci/default.xbe.enc` (`openssl enc -aes-256-cbc -pbkdf2 -iter 200000`). The workflow decrypts it with the `XBE_KEY` secret. `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` sign the release. `app/build.gradle` reads them through the `BLACK_KEYSTORE*` environment variables and falls back to the debug key when they're absent. The version comes from the tag (`-PversionName`) and the run number (`-PversionCode`), and is passed to Gradle through `GRADLE_ARGS` in `build.bat`. If `assets/default.xbe` changes, re-encrypt `ci/default.xbe.enc` with the same key.
+Two workflows, both startable by hand from the Actions tab with a `ref` input that takes any branch, tag or commit:
+
+- `.github/workflows/build.yml` builds the full app on a Windows runner. A `v*` tag push (`git tag v1.2.3 && git push origin v1.2.3`) also publishes a GitHub Release with `Black-<version>.apk`; a manual run only attaches the APK to the run as an artifact. The release body comes from `ci/release-notes.md`, with its `{{...}}` placeholders filled in. The xbe is committed only in encrypted form, as `ci/default.xbe.enc` (`openssl enc -aes-256-cbc -pbkdf2 -iter 200000`). The workflow decrypts it with the `XBE_KEY` secret. `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` sign the release. `app/build.gradle` reads them through the `BLACK_KEYSTORE*` environment variables and falls back to the debug key when they're absent. The version comes from the tag (`-PversionName`) and the run number (`-PversionCode`), and is passed to Gradle through `GRADLE_ARGS` in `build.bat`. If `assets/default.xbe` changes, re-encrypt `ci/default.xbe.enc` with the same key.
+- `.github/workflows/preview.yml` builds the standalone Control Center preview APK (`com.racas.black.preview`, `-PpreviewOnly :uipreview:assembleRelease`) on Ubuntu, without the NDK, Windows or game data. Manual runs take `ref`, `version` and an optional `release_tag` (update that existing `preview-*` prerelease; otherwise artifact only). Pull requests touching `ui/`, `uipreview/` or the Gradle files get an artifact for the PR head. `preview-v*` tag pushes publish/update the matching prerelease. The `PREVIEW_*` keystore secrets sign it; tag builds and release updates fail without them because a debug-signed APK cannot update a signed preview.
+- A manual run never publishes: `Build` only publishes on a `v*` tag push, and `UI Preview` only on a `preview-v*` tag push or when `release_tag` names an existing prerelease in that repository. Manually started builds check out the selected `ref`; `workflow_dispatch` must exist on the default branch for the Run workflow button (and the PR trigger) to appear.
+
 
 ## Where the SDK comes from
 
@@ -46,7 +52,8 @@ The root `CMakeLists.txt` builds one shared library, `libmain.so`, which SDL's a
   - `src/sound/`: DirectSound reimplemented (buffers, streams, ADPCM decode, mixer, reverb).
   - `src/common/`: `game_info.cpp` defines `app::kGame`, the struct that describes the game to the runtime (title, settings file, option bindings, load/save/init, pad and rumble filters, UI callback). Also here: the in-game options menu (`menu.cpp`), `options.h` (`game::Options`, saved to `black.toml`), translations, and `europe.patch` (see below).
 - **`native/`**, the Android host. `main.cpp` runs SDL's window and event loop, the app lifecycle and foreground/surface handling. `vulkan.cpp` is the Vulkan backend, and `vk_shader.cpp` compiles the SDK's HLSL shader translations to SPIR-V with glslang. The rest: `touch.cpp` (touch controls and layout editor, plus keyboard and mouse), `gyro.cpp`, `input.cpp` (controllers), `audio.cpp`, `ui.cpp` (ImGui), and `game_files.cpp`, which finds the game files or ISO and checks the xbe's SHA1 against `kImageSha1`. `host.h` declares the interfaces these parts share. `native/compat/crt.h` is force-included into all host sources (not the generated ones).
-- **`app/`**: Gradle module. `BlackActivity.java` extends `SDLActivity`. It asks for all-files access (the storage permission on Android 10) and creates `/storage/emulated/0/Black` and `files/assets`, which are where the game files are looked for, along with a `Black` folder at the top of each SD card. `UpdateChecker.java` calls the GitHub API (`/releases/latest`) at every launch, and from the options' Check for Updates. If that tag is newer than the installed `versionName`, it shows an update dialog listing the changes from the release body's `## What's Changed` section, which CI fills from the commit subjects since the previous tag.
+- **`app/`**: Gradle module. `SettingsActivity.kt` is the Control Center launcher (Compose, `:ui` module) and `AppHost` implements the host contract: it scans the game folders, asks for storage access, imports a disc image or a game folder (`GameImporter.java`) and starts `BlackActivity`. That one extends `SDLActivity`, asks for all-files access (the storage permission on Android 10) and creates `/storage/emulated/0/Black` and `files/assets`, which are where the game files are looked for, along with a `Black` folder at the top of each SD card. `UpdateChecker.java` calls the GitHub API (`/releases/latest`) at every launch, and from the options' Check for Updates. If that tag is newer than the installed `versionName`, it shows an update dialog listing the changes from the release body's `## What's Changed` section, which CI fills from the commit subjects since the previous tag.
+- **`uipreview/`**: the standalone Control Center preview APK (`com.racas.black.preview`), which links `:ui` and implements the same host contract without the game: it can request storage access and read the real game folders from SAF to show what the setup screens look like, but cannot start the game. It is built by the UI Preview workflow and installs beside the full app.
 
 ### How recompiled code reaches the host
 

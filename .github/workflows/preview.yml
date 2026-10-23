@@ -1,20 +1,53 @@
-# Builds the installable Control Center preview APK. It is a separate package (com.racas.black.preview), needs no game
-# data and can be installed beside the full app.
+# Builds the installable Control Center preview APK (com.racas.black.preview). It is a separate package, needs no game
+# data and installs beside the full app. The APK is the interface only: it runs against demo settings and never starts
+# the game.
+#
+# Runs:
+#  - manual: Actions -> UI Preview -> Run workflow. The `ref` input builds any branch, tag or commit, so the branch
+#    does not have to be the one the workflow file lives on. The APK is always attached to the run as an artifact;
+#    `release_tag` additionally updates that existing preview-v* prerelease with the new APK and notes.
+#  - pull request: builds an artifact for the PR head, so an unmerged preview can be downloaded from the run page.
+#    (Starts working once this file is on the default branch; a fork PR gets no secrets, so it is debug signed.)
+#  - preview-v* tag: builds and updates the matching prerelease.
 #
 # Secrets for a signed preview: PREVIEW_KEYSTORE_BASE64, PREVIEW_KEYSTORE_PASSWORD, PREVIEW_KEY_ALIAS,
-# PREVIEW_KEY_PASSWORD. They are required for tagged releases; a manual run without them gets a debug-signed artifact.
+# PREVIEW_KEY_PASSWORD. Tag releases and manual release updates require all four: an unsigned APK cannot install over
+# an earlier signed preview. An artifact-only manual run without them falls back to the debug signature.
 name: UI Preview
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to build (empty: the branch this run was started from)"
+        type: string
+        default: ""
+      version:
+        description: "Version name (empty: the preview-v* tag, or 2.2-preview-<run>)"
+        type: string
+        default: ""
+      release_tag:
+        description: "Existing preview-v* release to update, e.g. preview-v2.1 (empty: artifact only)"
+        type: string
+        default: ""
   push:
     tags: ["preview-v*"]
+  pull_request:
+    paths:
+      - "ui/**"
+      - "uipreview/**"
+      - "build.gradle"
+      - "settings.gradle"
+      - "gradle.properties"
+      - "gradle/**"
+      - ".github/workflows/preview.yml"
 
 permissions:
   contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   preview:
@@ -22,7 +55,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out the chosen ref
+        uses: actions/checkout@v5
+        with:
+          # inputs are empty for tag and pull request runs, so those fall back to the event's ref
+          ref: ${{ github.event.inputs.ref || github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0  # tags and history for the "What's changed" list
 
       - uses: actions/setup-java@v5
         with:
@@ -40,14 +78,65 @@ jobs:
       - name: Version
         id: version
         shell: bash
+        env:
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == preview-v* ]]; then
-            name="${GITHUB_REF_NAME#preview-v}"
+          do_release=false
+          tag=""
+          source="${INPUT_REF:-$GITHUB_REF_NAME}"
+          if [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF_TYPE" = "tag" ] && [[ "$GITHUB_REF_NAME" == preview-v* ]]; then
+            tag="$GITHUB_REF_NAME"
+            version="${GITHUB_REF_NAME#preview-v}"
+            do_release=true
+            source="tag $GITHUB_REF_NAME"
+          elif [ -n "$INPUT_RELEASE_TAG" ]; then
+            if [[ "$INPUT_RELEASE_TAG" != preview-v* ]]; then
+              echo "::error::release_tag must name a preview-v* prerelease (got $INPUT_RELEASE_TAG)."
+              exit 1
+            fi
+            tag="$INPUT_RELEASE_TAG"
+            # the asset name has to match the one already on the release, so the old APK is replaced not left behind
+            version="${INPUT_RELEASE_TAG#preview-v}"
+            do_release=true
+          elif [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            version="pr-${PR_NUMBER}-preview"
+            source="PR #${PR_NUMBER} head ${GITHUB_SHA:0:7}"
           else
-            name="2.1-preview-${GITHUB_RUN_NUMBER}"
+            version="2.2-preview-${GITHUB_RUN_NUMBER}"
           fi
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "GRADLE_ARGS=-PversionCode=${{ github.run_number }} -PversionName=$name" >> "$GITHUB_ENV"
+          # the version goes into the APK file and artifact names: keep it to characters those accept
+          version=$(printf '%s' "$version" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9._-]+/-/g; s/^[-._]+//; s/[-._]+$//')
+          [ -z "$version" ] && version="preview-${GITHUB_RUN_NUMBER}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "do_release=$do_release" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          # versionCode is offset above the codes previews had before manual builds existed (2 for the published
+          # 2.1 preview), so the next build installs as an update over the installed preview
+          echo "GRADLE_ARGS=-PversionCode=$((100000 + GITHUB_RUN_NUMBER)) -PversionName=${version}" >> "$GITHUB_ENV"
+
+      - name: Check the release to update exists
+        if: steps.version.outputs.do_release == 'true' && github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::There is no release named $TAG in $GITHUB_REPOSITORY. Leave release_tag empty to build an artifact, or create that prerelease first."
+            exit 1
+          fi
+          if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" != "true" ]; then
+            echo "::error::$TAG is not a prerelease; this workflow only updates preview-v* prereleases."
+            exit 1
+          fi
 
       - name: Preview key
         shell: bash
@@ -56,14 +145,14 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.PREVIEW_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.PREVIEW_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.PREVIEW_KEY_PASSWORD }}
-          TAG_RELEASE: ${{ startsWith(github.ref, 'refs/tags/preview-v') }}
+          REQUIRE_SIGNING: ${{ steps.version.outputs.do_release }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
-            if [ "$TAG_RELEASE" = "true" ]; then
-              echo "::error::Tagged preview releases require all four PREVIEW_* signing secrets."
+            if [ "$REQUIRE_SIGNING" = "true" ]; then
+              echo "::error::Tagged previews and release updates require all four PREVIEW_* signing secrets."
               exit 1
             fi
-            echo "::warning::No preview keystore: the APK has a debug signature"
+            echo "::warning::No preview keystore: the APK has a debug signature, which cannot update a signed preview."
             exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/preview.jks"
@@ -83,27 +172,131 @@ jobs:
         run: mv uipreview/build/outputs/apk/release/uipreview-release.apk "Black-Control-Center-${{ steps.version.outputs.name }}.apk"
 
       - name: Verify APK signature
+        id: verify
         shell: bash
         run: |
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs \
-            "Black-Control-Center-${{ steps.version.outputs.name }}.apk"
+          apk="Black-Control-Center-${{ steps.version.outputs.name }}.apk"
+          out=$("$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk")
+          echo "$out"
+          echo "cert=$(echo "$out" | sed -n 's/^Signer #1 certificate DN: //p')" >> "$GITHUB_OUTPUT"
+          echo "cert_sha256=$(echo "$out" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$apk" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c %s "$apk")" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.version.outputs.do_release }}" = "true" ]; then
+            # the preview updates itself through this certificate, so a different key must not be published
+            expected="5cf9c468c5846c8def1b7e772595c12542d45ea880d3e667123c9389cc6bef43"
+            got=$(echo "$out" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+            if [ "$got" != "$expected" ]; then
+              echo "::error::The release APK is signed by $got, not the preview certificate $expected. Check the PREVIEW_KEYSTORE_* secrets."
+              exit 1
+            fi
+          fi
 
       - uses: actions/upload-artifact@v5
         with:
           name: Black-Control-Center-${{ steps.version.outputs.name }}
           path: Black-Control-Center-${{ steps.version.outputs.name }}.apk
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/preview-v')
+      - name: Run summary
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          SOURCE: ${{ steps.version.outputs.source }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+          DO_RELEASE: ${{ steps.version.outputs.do_release }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          CERT: ${{ steps.verify.outputs.cert }}
+          CERT_SHA: ${{ steps.verify.outputs.cert_sha256 }}
+          APK_SHA: ${{ steps.verify.outputs.sha256 }}
+          APK_SIZE: ${{ steps.verify.outputs.size }}
+        run: |
+          {
+            echo "## Control Center preview \`$VERSION\`"
+            echo
+            echo "- Source: $SOURCE at \`$SHORT_SHA\`"
+            echo "- APK: \`Black-Control-Center-$VERSION.apk\` ($APK_SIZE bytes)"
+            echo "- SHA-256: \`$APK_SHA\`"
+            echo "- Signer: $CERT"
+            echo "- Certificate SHA-256: \`$CERT_SHA\`"
+            echo
+            echo "**Download:** open the **Artifacts** section at the bottom of this run page."
+            echo
+            echo '```'
+            echo "adb install -r Black-Control-Center-$VERSION.apk"
+            echo '```'
+            if [ "$DO_RELEASE" = "true" ]; then
+              echo
+              echo "The prerelease **$RELEASE_TAG** is updated by the final step of this run."
+            fi
+            echo
+            echo "Interface only: the preview runs against demo settings and does not include the game."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+      - name: Release notes
+        if: steps.version.outputs.do_release == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SOURCE: ${{ steps.version.outputs.source }}
+          SHORT_SHA: ${{ steps.version.outputs.short_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          CERT: ${{ steps.verify.outputs.cert }}
+          CERT_SHA: ${{ steps.verify.outputs.cert_sha256 }}
+          APK_SHA: ${{ steps.verify.outputs.sha256 }}
+          APK_SIZE: ${{ steps.verify.outputs.size }}
+          APK: Black-Control-Center-${{ steps.version.outputs.name }}.apk
+        run: |
+          # the commits since the previous preview tag, so an update says what changed
+          prev=$(git describe --tags --abbrev=0 --match 'preview-v*' HEAD 2>/dev/null || true)
+          if [ -n "$prev" ] && [ "$(git rev-parse "$prev^{commit}")" = "$(git rev-parse HEAD)" ]; then
+            prev=$(git describe --tags --abbrev=0 --match 'preview-v*' HEAD^ 2>/dev/null || true)
+          fi
+          if [ -n "$prev" ]; then
+            changes=$(git log --no-merges --pretty='* %s' -n 40 "$prev..HEAD")
+          else
+            changes=$(git log --no-merges --pretty='* %s' -15 HEAD)
+          fi
+          [ -z "$changes" ] && changes="* No changes since $prev"
+
+          {
+            echo "Installable preview of the Compose Material 3 Control Center."
+            echo
+            echo "This APK is the **interface only**: it runs against demo settings and does not include the game."
+            echo "Install it beside the full app; its package is \`com.racas.black.preview\` (versionName \`$VERSION\`, minSdk 29)."
+            echo
+            echo "- Source: $SOURCE at \`$SHORT_SHA\`"
+            echo "- Build: [UI Preview run $GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo "- APK: \`$APK\` ($APK_SIZE bytes)"
+            echo "- SHA-256: \`$APK_SHA\`"
+            echo "- Signer: $CERT"
+            echo "- Certificate SHA-256: \`$CERT_SHA\`"
+            echo
+            echo "### What's changed"
+            echo
+            echo "$changes"
+            echo
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "This build updated the existing prerelease from a manual **UI Preview** run; download the APK below."
+            else
+              echo "Built by the **UI Preview** workflow from tag \`$TAG\`."
+            fi
+            echo
+            echo "Manual preview builds: **Actions -> UI Preview -> Run workflow**. Pick any branch, tag or commit in the"
+            echo "\`ref\` input and download the APK from the run's **Artifacts**; no release is needed to test a branch."
+          } > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Update the prerelease
+        if: steps.version.outputs.do_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: Black Control Center Preview ${{ github.ref_name }}
-          body: |
-            Installable preview of the Compose Material 3 Control Center.
-
-            This APK is the interface only: it runs against demo settings and does not include the game. Install it
-            beside the full app; its package is `com.racas.black.preview`.
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Black Control Center Preview ${{ steps.version.outputs.tag }}
+          body_path: ${{ runner.temp }}/release-notes.md
           files: Black-Control-Center-${{ steps.version.outputs.name }}.apk
           prerelease: true
           make_latest: false
+          # overwrite_files defaults to true: the asset with the same name is replaced
