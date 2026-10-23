@@ -38,10 +38,11 @@ using flash::Text;
 
 namespace {
 
-constexpr uint32_t kHashTable = 0x2AC908;
-// as menu.cpp's pages, but for the cheats: those are in the panel the touch controls' gear button opens
-const char* const kCaptions[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD"};
-constexpr int kEntries = int(std::size(kCaptions));
+// as menu.cpp's pages, but for the cheats: those are in the panel the touch controls' gear button opens. The
+// credits are a page with no button here, the title menu's CREDITS opens it
+const char* const kCaptions[] = {"GRAPHICS", "TOUCH CONTROLS", "GENERAL", "MOUSE AND KEYBOARD", "CHEATS", "CREDITS"};
+constexpr int kEntries = 4;
+constexpr int kCreditsMode = 6;
 constexpr int kSlots = 8;
 constexpr int kDepth = 100;
 constexpr int kEscape = 0x1B;
@@ -154,13 +155,9 @@ struct Page {
 Page g_page;     // game thread
 int g_next = 0;  // the mode of the page being loaded
 int g_last = 0;  // the mode before it, whose button takes the focus back
+std::string g_credits_back;  // the title menu that opened the credits, the page they go back to; empty for none
 
-// the id of a string by its name
-uint32_t Hash(const char* text) {
-    uint32_t h = ~0u;
-    for (; *text; text++) h = uint32_t(int32_t(h) >> 8) ^ R32(kHashTable + ((h ^ uint8_t(*text)) & 0xFF) * 4);
-    return h;
-}
+uint32_t Hash(const char* text) { return flash::StringId(text); }
 
 // that field shows field n from now on
 bool Show(X86Context& ctx, int n, uint32_t clip, const char* shows = nullptr, const char* text = nullptr) {
@@ -333,9 +330,10 @@ bool Rows(X86Context& ctx, uint32_t root, uint32_t holder, uint32_t menu) {
     for (const char* stock : h.stock)
         if (stock) Hide(Member(ctx, holder, stock));
     Show(ctx, kTitle, holder, "$FE_OPTIONS");
-    // back is the options page, not its own back
+    // back is the options page, not its own back; the credits go back to the title menu
     Set(ctx, menu, "mfuncFunctionBack", 0);
-    Set(ctx, menu, "mstrPageBack", String(ctx, h.page));
+    bool credits = p.mode == kCreditsMode && !g_credits_back.empty();
+    Set(ctx, menu, "mstrPageBack", String(ctx, credits ? g_credits_back.c_str() : h.page));
     Focus(ctx, p.name[std::min(FirstRow(p), p.slots - 1)]);
     return true;
 }
@@ -528,10 +526,11 @@ void Build(X86Context& ctx, const Host& host, uint32_t root, uint32_t holder, ui
     }
     p.mode = g_next;
     g_next = 0;
+    if (!g_credits_back.empty() && !p.mode) p.mode = kCreditsMode;
     p.failed = !(p.mode ? Rows(ctx, root, holder, menu) : Entries(ctx, root, holder));
     const char* shown = p.mode ? kCaptions[p.mode - 1] : "buttons";
     LOGI("options menu: %s, %s%s", host.page, shown, p.failed ? ", failed" : "");
-    if (!p.failed && !p.mode && g_last) Focus(ctx, p.entry[std::min(g_last, host.entries) - 1]);
+    if (!p.failed && !p.mode && g_last && g_last <= host.entries) Focus(ctx, p.entry[std::min(g_last, host.entries) - 1]);
     g_last = p.mode;
 }
 
@@ -660,6 +659,8 @@ void Tick(X86Context& ctx, uint32_t ui) {
     bool running = host && R32(flash::kPlayerReady) == 1 && R32(flash::kPlayer) && R32(ui + kPageReady) == kPageRunning;
     if (!running) {
         if (*name && !host) g_next = g_last = 0;
+        // the credits' way back is spent once they are left for a page not the options page
+        if (*name && !host && p.mode == kCreditsMode) g_credits_back.clear();
         p = {};
         return;
     }
@@ -717,6 +718,9 @@ void OptionsMenu(X86Context& ctx, uint8_t*) {
 }
 
 namespace game {
+
+// exit_menu.cpp: the options page the title menu's CREDITS goes to loads as the credits, back to that title menu
+void OpenCredits(const char* title_page) { g_credits_back = title_page; }
 
 // mouse.cpp: a key binding takes the next click
 bool OptionsCapturing() { return g_page.capture != 0; }

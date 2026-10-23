@@ -236,7 +236,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kFmvScale, kGyro, kGyroSensitivity, kTouchLayout, kTouchOpacity, kTouchSize, kTouchEdit,
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
              kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity,
-             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin };
+             kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin, kCredit };
 
 using rows::Kind;
 using rows::Row;
@@ -306,6 +306,45 @@ constexpr Row kCheatRows[] = {
     {Kind::Value, kUnlockLevels, "UNLOCK ALL MISSIONS"},
     {Kind::Value, kUnlockBlackOps, "UNLOCK BLACK OPS"},
 };
+
+// the title menu's CREDITS page: who and what, and the links, which open in the browser. Its rows take no step; a
+// row's id is kCredit and its place in kCredits
+struct Credit {
+    const char* label;  // a heading when there is no value
+    const char* value;
+    const char* url;
+};
+constexpr Credit kCredits[] = {
+    {"CONTRIBUTORS", nullptr, nullptr},
+    {"RANGGACASPER", "ANDROID PORT", nullptr},
+    {"DATFOOLDIVE", "ANY WEAPON IN ANY LEVEL", nullptr},
+    {"BAGASROMADON", "BUTTON SKIN", nullptr},
+    {"ZAKIRU", "HDR SHADER", nullptr},
+    {"BUILT WITH", nullptr, nullptr},
+    {"XBOXXBE-RECOMP", "TGP482", nullptr},
+    {"SDL3, GLSLANG, TOML++", "LIBRARIES", nullptr},
+    {"DEAR IMGUI", "LIBRARY", nullptr},
+    {"XEMU, CXBX-RELOADED", "REFERENCES", nullptr},
+    {"LINKS", nullptr, nullptr},
+    {"YOUTUBE", "OPEN", "https://youtube.com/c/@RanggaCasper"},
+    {"GITHUB", "OPEN", "https://github.com/RanggaCasper"},
+    {"SUPPORT", "OPEN", "https://sociabuzz.com/racas/tribe"},
+};
+
+const std::vector<Row>& CreditRows() {
+    static const std::vector<Row> list = [] {
+        std::vector<Row> out;
+        for (const Credit& c : kCredits) out.push_back({c.value ? Kind::Value : Kind::Heading, kCredit, c.label});
+        return out;
+    }();
+    return list;
+}
+
+const Credit* CreditOf(const Row& row) {
+    for (const Credit& c : kCredits)
+        if (row.label == c.label) return &c;
+    return nullptr;
+}
 
 const std::vector<Row>& InputRows() {
     static const std::vector<Row> list = [] {
@@ -563,6 +602,7 @@ constexpr int kTouchPage = 1;
 constexpr int kGeneralPage = 2;
 constexpr int kKeyboardPage = 3;
 constexpr int kCheatsPage = 4;
+constexpr int kCreditsPage = 5;
 
 void RestoreDefaults(int page) {
     game::Options& o = game::Opt();
@@ -762,8 +802,8 @@ void Defaults() {
 
 // the panel is the cheats alone, the touch button's way to them in play; every other setting is in the game's own
 // options menu
-void DrawTitle() {
-    std::string title = Ui("CHEATS");
+void DrawTitle(const char* caption) {
+    std::string title = Ui(caption);
     float title_pad = (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(title.c_str()).x) * 0.5f;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(title_pad, 0.0f));
     ImGui::TextUnformatted(title.c_str());
@@ -800,7 +840,7 @@ void DrawPanel() {
     constexpr ImGuiWindowFlags kFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar;
     if (ImGui::Begin("##settings", nullptr, kFlags)) {
-        DrawTitle();
+        DrawTitle("CHEATS");
         ImGui::Separator();
         float footer = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + em;
         ImGui::BeginChild("##rows", ImVec2(0, -footer), ImGuiChildFlags_NavFlattened);
@@ -860,6 +900,10 @@ const rows::Row* rows::Page(int page, size_t* count) {
         *count = std::size(kCheatRows);
         return kCheatRows;
     }
+    if (page == kCreditsPage) {
+        *count = CreditRows().size();
+        return CreditRows().data();
+    }
     if (page == kTouchPage) {
         *count = std::size(kTouchRows);
         return kTouchRows;
@@ -878,7 +922,15 @@ const rows::Row* rows::Controller(size_t* count) {
 }
 
 std::string rows::Value(const Row& row, int step) {
-    return row.kind == Kind::Bind ? KeyText(input::Binding(size_t(row.id))) : RowText(row.id, step);
+    if (row.kind == Kind::Bind) return KeyText(input::Binding(size_t(row.id)));
+    if (row.id == kCredit) {
+        // a step on a link opens it
+        const Credit* c = CreditOf(row);
+        if (!c || !c->value) return " ";
+        if (step && c->url) SDL_OpenURL(c->url);
+        return c->value;
+    }
+    return RowText(row.id, step);
 }
 
 void rows::Defaults(int page) { RestoreDefaults(page); }
@@ -888,7 +940,10 @@ bool rows::Restorable(int page) { return page == kKeyboardPage || page == kCheat
 
 bool rows::Enabled(const Row&) { return true; }
 
-bool rows::Opens(const Row& row) { return row.kind == Kind::Value && (row.id == kTouchEdit || row.id == kCheckUpdates); }
+bool rows::Opens(const Row& row) {
+    // the credits' rows have no arrows: the links open, the rest do nothing
+    return row.kind == Kind::Value && (row.id == kTouchEdit || row.id == kCheckUpdates || row.id == kCredit);
+}
 
 bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 
