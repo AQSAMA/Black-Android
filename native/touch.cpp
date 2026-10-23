@@ -513,7 +513,7 @@ enum class Role : uint8_t { None, Stick, Look, Button, Cursor, Drag, Pinch };
 // the host. Where it sits is the layout's, which the player edits and picks presets for
 enum : int { kGyro = -2, kPanel = -1, kAnalogA = 0, kAnalogB = 1, kAnalogX = 2, kAnalogY = 3, kAnalogLT = 6, kAnalogRT = 7 };
 constexpr int kBit = 8;  // kBit + n: buttons bit n (dpad up down left right, start, back, left thumb, right thumb)
-enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right, Zoom };
+enum class Icon : uint8_t { Bullet, Scope, Mode, Reload, Crouch, Knife, Hand, Grenade, Swap, Health, Map, Pause, Gear, Back, Gyro, Move, Suppressor, Up, Down, Left, Right, Zoom, Enter };
 // Play while the player has the controls, Game outside the menus (cutscenes too), Menus in the menus and options,
 // Always in both
 enum class When : uint8_t { Play, Menus, Game, Always };
@@ -552,6 +552,8 @@ constexpr Button kButtons[] = {
     {"dpad_right", "Right", Icon::Right, kBit + 3, When::Menus},
     // the settings panel over the game, where its cheats give any weapon; a tap again closes it
     {"panel", "Panel", Icon::Gear, kPanel, When::Always},
+    // confirm in the menus, as a pad's A, where a tap on the row is hard to aim
+    {"enter", "Enter", Icon::Enter, kAnalogA, When::Menus},
     // the firing mode's button again, beside use while a scope is up: the scope's level, X2 or X5, and a tap switches
     {"zoom", "Scope zoom", Icon::Zoom, kBit + 0, When::Play},
 };
@@ -576,6 +578,7 @@ constexpr Layout kTwoFinger = {{
     {0.036f, 0.08f, 0.045f}, {0.70f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
     {0.581f, 0.07f, 0.04f},
+    {0.92f, 0.78f, 0.07f},
     {0.715f, 0.40f, 0.05f},
     {0.108f, 0.70f, 0.12f},
 }};
@@ -588,6 +591,7 @@ constexpr Layout kThreeFinger = {{
     {0.036f, 0.08f, 0.045f}, {0.69f, 0.56f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
     {0.581f, 0.07f, 0.04f},
+    {0.92f, 0.78f, 0.07f},
     {0.69f, 0.40f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
@@ -600,6 +604,7 @@ constexpr Layout kFourFinger = {{
     {0.036f, 0.08f, 0.045f}, {0.655f, 0.55f, 0.042f},
     {0.11f, 0.60f, 0.048f}, {0.11f, 0.80f, 0.048f}, {0.064f, 0.70f, 0.048f}, {0.156f, 0.70f, 0.048f},
     {0.581f, 0.07f, 0.04f},
+    {0.92f, 0.78f, 0.07f},
     {0.655f, 0.38f, 0.045f},
     {0.13f, 0.72f, 0.12f},
 }};
@@ -1312,6 +1317,10 @@ void DrawIcon(const Pen& p, Icon icon) {
             p.Box(-0.56f, -0.08f, -0.18f, 0.08f, 0.02f);
             for (float x : {0.04f, 0.22f, 0.40f})
                 p.dl->AddLine(p.P(x, -0.17f), p.P(x, 0.17f), IM_COL32(0, 0, 0, 140), p.th * 0.6f);
+            break;
+        case Icon::Enter:  // a return arrow: down the right, then back to the left
+            p.Line(0.38f, -0.4f, 0.38f, 0.14f);
+            p.Arrow(0.38f, 0.14f, -0.42f, 0.14f, 0.22f);
             break;
         case Icon::Back:
         case Icon::Left:
