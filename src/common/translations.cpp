@@ -69,6 +69,7 @@ constexpr Entry kEntries[] = {
     {"RELOAD BLUR", {u"Flou au rechargement", u"Nachlade-Unschärfe", u"Sfocatura in ricarica", u"Desenfoque al recargar", u"Blur saat isi ulang"}},
     {"BLOOM", {u"Flou lumineux", u"Bloom", u"Bloom", u"Resplandor", u"Bloom"}},
     {"FOG", {u"Brouillard", u"Nebel", u"Nebbia", u"Niebla", u"Kabut"}},
+    {"ANTI-ALIASING", {u"Anticrénelage", u"Kantenglättung", u"Anti-aliasing", u"Antialiasing", u"Anti-aliasing"}},
     {"SKIP INTROS", {u"Passer les intros", u"Intros überspringen", u"Salta introduzione", u"Saltar introducción", u"Lewati intro"}},
     {"PAUSE ON FOCUS LOSS", {u"Pause en arrière-plan", u"Pause im Hintergrund", u"Pausa in background", u"Pausa en segundo plano", u"Jeda di latar belakang"}},
     {"LANGUAGE", {u"Langue", u"Sprache", u"Lingua", u"Idioma", u"Bahasa"}},

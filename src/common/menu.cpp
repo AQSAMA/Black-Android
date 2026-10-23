@@ -88,6 +88,8 @@ constexpr uint32_t kAnisoValues[] = {0, 2, 4, 8, 16};
 const char* const kAnisoNames[] = {"GAME DEFAULT", "2x", "4x", "8x", "16x"};
 constexpr uint32_t kDistances[] = {1, 2, 4, 8};
 const char* const kDistanceNames[] = {"GAME DEFAULT", "2x", "4x", "8x"};
+constexpr uint32_t kAntiAliasings[] = {0, 1, 2};
+const char* const kAntiAliasingNames[] = {"OFF", "FXAA", "SSAA 2X"};
 constexpr uint32_t kFmvScales[] = {0, 1};
 const char* const kFmvScaleNames[] = {"FILL", "4:3"};
 constexpr uint32_t kScreenFilters[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -237,7 +239,7 @@ enum RowId { kRenderResolution, kMaxFps, kVsync, kFpsCounter, kAniso, kReloadBlu
              kInfiniteAmmo, kRapidFire, kNoRecoil, kGameSpeed, kGodMode, kOneHitKill, kInfiniteGrenades,
              kCheckUpdates, kTouchSensitivity, kLeftDeadzone, kRightDeadzone, kLeftSensitivity, kRightSensitivity,
              kScreenFilter, kGyroInvertX, kGyroInvertY, kUnlockLevels, kUnlockBlackOps, kTouchSkin, kCredit, kBloom,
-             kFog };
+             kFog, kAntiAliasing, kHdr };
 
 using rows::Kind;
 using rows::Row;
@@ -260,6 +262,8 @@ constexpr Row kGraphicsRows[] = {
     {Kind::Value, kReloadBlur, "RELOAD BLUR"},
     {Kind::Value, kBloom, "BLOOM"},
     {Kind::Value, kFog, "FOG"},
+    {Kind::Value, kAntiAliasing, "ANTI-ALIASING"},
+    {Kind::Value, kHdr, "HDR"},
 };
 
 constexpr Row kTouchRows[] = {
@@ -374,6 +378,7 @@ bool* ToggleFlag(Settings& s, int id) {
         case kReloadBlur: return &o.reload_blur;
         case kBloom: return &o.bloom;
         case kFog: return &o.fog;
+        case kHdr: return &o.hdr;
         case kSkipIntros: return &o.skip_intros;
         case kInvertMouse: return &o.invert_mouse;
         case kHoldAim: return &o.hold_aim;
@@ -411,6 +416,10 @@ bool StepDisplayRow(int id, int step, Settings& s, char (&text)[64]) {
         }
         case kFmvScale:
             std::snprintf(text, sizeof(text), "%s", kFmvScaleNames[StepTable(kFmvScales, o.fmv_scale, step)]);
+            return true;
+        case kAntiAliasing:
+            std::snprintf(text, sizeof(text), "%s",
+                          kAntiAliasingNames[StepTable(kAntiAliasings, o.anti_aliasing, step)]);
             return true;
         case kScreenFilter:
             std::snprintf(text, sizeof(text), "%s",

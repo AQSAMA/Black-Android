@@ -80,9 +80,10 @@ float4 psmain(O i) : SV_Target {
 // the screen filters, the frame onto the screen through one of them. src.xy a texel of the frame, src.z seconds for
 // what moves (grain, VHS), src.w the colour look. pscrt: crt.x the lines, a whole number of pixels each so they never
 // beat against the screen's; crt.y how dark the gaps between them are, crt.z the tube's curve, crt.w the phosphor
-// mask's dimming; look.x the corners' shade, look.y the brightness the lines and mask take back
+// mask's dimming; look.x the corners' shade, look.y the brightness the lines and mask take back. post.x HDR on,
+// post.y FXAA on; both go before the filter, psplain is them alone
 const char* kFilterHlsl = R"(
-cbuffer B : register(b1) { float4 uvrect; float4 opts; float4 crt; float4 look; float4 src; };
+cbuffer B : register(b1) { float4 uvrect; float4 opts; float4 crt; float4 look; float4 src; float4 post; };
 Texture2D img : register(t0);
 Texture2D lut : register(t1);
 SamplerState ls : register(s0);
@@ -104,12 +105,46 @@ float Luma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
 float Noise(float2 p) { return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
 float Corners(float2 uv, float k) { return pow(saturate(16 * uv.x * uv.y * (1 - uv.x) * (1 - uv.y)), k); }
 
+// a Reinhard tone map against the console's overbright look, with the saturation and the shadows it loses given back
+float3 Tone(float3 c) {
+    if (post.x <= 0) return c;
+    float l = dot(c, float3(0.2126, 0.7152, 0.0722));
+    float shadow = 1 - smoothstep(0, 0.8, l);
+    c = lerp(l, c, 1 + shadow);
+    float3 mapped = pow(max(c / (c + 1), 0), 1 / 2.2);
+    c = lerp(c, mapped, 0.8);
+    return saturate(c * (1 - shadow * 0.5));
+}
+
+// FXAA: across an edge the luma's direction says, two taps or four, the four unless they reach past the corners
+float3 Fxaa(float2 uv) {
+    float2 px = src.xy;
+    float3 m = Fetch(uv);
+    float nw = Luma(Fetch(uv + float2(-1, -1) * px)), ne = Luma(Fetch(uv + float2(1, -1) * px));
+    float sw = Luma(Fetch(uv + float2(-1, 1) * px)), se = Luma(Fetch(uv + float2(1, 1) * px));
+    float lm = Luma(m);
+    float lo = min(lm, min(min(nw, ne), min(sw, se))), hi = max(lm, max(max(nw, ne), max(sw, se)));
+    if (hi - lo < max(0.0312, hi * 0.125)) return m;
+    float2 dir = float2(-((nw + ne) - (sw + se)), (nw + sw) - (ne + se));
+    float reduce = max((nw + ne + sw + se) * (0.25 / 8), 1.0 / 128);
+    dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + reduce), -8, 8) * px;
+    float3 a = 0.5 * (Fetch(uv + dir * (1.0 / 3 - 0.5)) + Fetch(uv + dir * (2.0 / 3 - 0.5)));
+    float3 b = a * 0.5 + 0.25 * (Fetch(uv - dir * 0.5) + Fetch(uv + dir * 0.5));
+    float lb = Luma(b);
+    return lb < lo || lb > hi ? a : b;
+}
+
+// the frame at a point with what the graphics settings add before a filter
+float3 Frame(float2 uv) { return Tone(post.y > 0 ? Fxaa(uv) : Fetch(uv)); }
+
+float4 psplain(O i) : SV_Target { return float4(Frame(i.uv), 1); }
+
 float4 pscrt(O i) : SV_Target {
     float2 cc = i.uv * 2 - 1;
     cc *= 1 + crt.z * cc.yx * cc.yx;
     if (any(abs(cc) > 1)) return float4(0, 0, 0, 1);
     float2 uv = cc * 0.5 + 0.5;
-    float3 c = Fetch(uv);
+    float3 c = Frame(uv);
     // the beam is brightest at a line's middle, and a bright one spreads over the gap
     float f = frac(uv.y * crt.x);
     float gap = cos(3.14159265 * f);
@@ -128,7 +163,7 @@ float4 pssharpen(O i) : SV_Target {
     float3 w = Fetch(i.uv - float2(src.x, 0)), e = Fetch(i.uv + float2(src.x, 0));
     float3 lo = min(c, min(min(n, s), min(w, e))), hi = max(c, max(max(n, s), max(w, e)));
     float3 amp = sqrt(saturate(min(lo, 1 - hi) / max(hi, 1e-4)));
-    return float4(saturate(c + (4 * c - n - s - w - e) * amp * 0.35), 1);
+    return float4(Tone(saturate(c + (4 * c - n - s - w - e) * amp * 0.35)), 1);
 }
 
 float4 pscolor(O i) : SV_Target {
@@ -141,7 +176,7 @@ float4 pscolor(O i) : SV_Target {
         float band = saturate(1 - abs(frac(uv.y - t * 0.07) - 0.5) * 12);
         uv.x += (Noise(float2(row, floor(t * 30))) - 0.5) * (0.0015 + band * 0.006);
     }
-    float3 c = Fetch(uv);
+    float3 c = Frame(uv);
     if (mode == 0) {  // vibrant
         c = lerp(Luma(c), c, 1.35);
         c = (c - 0.5) * 1.08 + 0.5;
@@ -3135,7 +3170,12 @@ void VulkanBackend::DrawFrame(Target* t, uint32_t index) {
     float vw = std::min(w, h * aspect), vh = vw / aspect;
     uint32_t filter = std::min(game::Opt().screen_filter, 8u);
     uint32_t crt = filter <= 2 ? filter : 0;
-    float c[20] = {0, 0, 1, 1, gamma_ ? 1.0f : 0.0f, 0, 1, 1};
+    bool fxaa = game::Opt().anti_aliasing == 1, ssaa = game::Opt().anti_aliasing == 2;
+    bool post = game::Opt().hdr || fxaa;
+    // opts.z: the taps a side over each screen pixel, 2 averaging SSAA's samples
+    float c[24] = {0, 0, 1, 1, gamma_ ? 1.0f : 0.0f, 0, ssaa ? 2.0f : 1.0f, 1};
+    c[20] = game::Opt().hdr ? 1.0f : 0.0f;
+    c[21] = fxaa ? 1.0f : 0.0f;
     if (t) {
         // a texel of the frame, seconds that wrap before a float loses them, the colour look (4 vibrant on)
         using clock = std::chrono::steady_clock;
@@ -3159,8 +3199,8 @@ void VulkanBackend::DrawFrame(Target* t, uint32_t index) {
         std::memcpy(c + 8, rest, sizeof(rest));
     }
     Alloc cbuf = Constants(c, sizeof(c));
-    const char* hlsl = filter ? kFilterHlsl : kBlitHlsl;
-    const char* entry = crt ? "pscrt" : filter == 3 ? "pssharpen" : filter ? "pscolor" : "psmain";
+    const char* hlsl = filter || post ? kFilterHlsl : kBlitHlsl;
+    const char* entry = crt ? "pscrt" : filter == 3 ? "pssharpen" : filter ? "pscolor" : post ? "psplain" : "psmain";
     VkPipeline pipe = t ? FullScreenPipeline(hlsl, entry, swap_fmt_, VK_FORMAT_UNDEFINED, false) : VK_NULL_HANDLE;
     VkDescriptorSet set = VK_NULL_HANDLE;
     if (pipe) {
