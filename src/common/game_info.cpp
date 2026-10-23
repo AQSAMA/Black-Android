@@ -40,12 +40,14 @@ void Load(const void* table) {
     std::string language = t["language"].value_or(o.language);
     bool known = std::find(std::begin(kLanguages), std::end(kLanguages), language) != std::end(kLanguages);
     if (known) o.language = language;
+    // a key the player cleared in the Control Center is gone from [keys]: start from none, not from the last load
+    o.keys.clear();
     if (const toml::table* keys = t["keys"].as_table())
         for (auto&& [id, value] : *keys)
             if (auto v = value.value<std::string>()) o.keys[std::string(id.str())] = *v;
 }
 
-// after the settings load, before boot
+// the settings load, before boot
 void Init() {
     BootLanguage();  // latched before the options can change the setting
     input::LoadBindings();

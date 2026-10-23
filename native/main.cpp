@@ -14,6 +14,7 @@
 #include <cstring>
 #include <ctime>
 #include <cwchar>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <sstream>
@@ -24,7 +25,9 @@
 #include <toml++/toml.hpp>
 
 #include "app/app.h"
+#include "audio/output.h"
 #include "build_info.h"
+#include "common/mouse_keyboard.h"
 #include "common/options.h"
 #include "core/input.h"
 #include "core/log.h"
@@ -37,6 +40,8 @@ namespace {
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_foreground{true};
 std::atomic<uint32_t> g_surface_epoch{0};
+// set on the main thread when the Control Center's marker changes; the game thread applies it at a frame boundary
+std::atomic<bool> g_settings_pending{false};
 std::mutex g_foreground_lock;
 std::condition_variable g_foreground_cv;
 
@@ -79,6 +84,29 @@ void SetForeground(bool on) {
     LOGI("app: %s", on ? "in front" : "in the background");
 }
 
+// The Control Center writes the game's TOML files and touches .settings-changed last. Reading the marker's stamp
+// keeps this cheap on every turn of the loop; the game's own option pages do not touch it, so they never reload
+// their own save.
+void ReloadSettingsIfChanged() {
+    // the loop runs at frame rate; a marker check four times a second is soon enough for a settings change
+    static auto next = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    if (now < next) return;
+    next = now + std::chrono::milliseconds(250);
+    static std::string seen;
+    std::ifstream in(app::ExeDir() / ".settings-changed");
+    if (!in) return;
+    std::string stamp;
+    std::getline(in, stamp);
+    if (stamp.empty() || stamp == seen) return;
+    seen = stamp;
+    // the layout is drawn by the main and render threads; the game's own options are applied on the game thread in
+    // host::ApplyPendingSettings, where the game itself writes them
+    touch::ReloadLayout();
+    host::RequestSettingsApply();
+    LOGI("settings: reload queued for the game thread");
+}
+
 // SDL's display mode in landscape: the window is not up yet when the settings load
 app::Mode ScreenMode() {
     if (g_window) {
@@ -109,6 +137,18 @@ uint32_t SurfaceEpoch() { return g_surface_epoch; }
 void WaitForeground() {
     std::unique_lock lock(g_foreground_lock);
     g_foreground_cv.wait(lock, [] { return g_foreground.load(); });
+}
+
+void RequestSettingsApply() { g_settings_pending = true; }
+
+void ApplyPendingSettings() {
+    if (!g_settings_pending.exchange(false)) return;
+    app::Load();
+    // the options list and game::Load changed the values; make the mixer and the key map use the new ones now
+    audio::SetOutputMode(game::Opt().audio_output);
+    input::LoadBindings();
+    gyro::Reload();
+    LOGI("settings: reloaded from the Control Center");
 }
 
 void WindowPixels(int& w, int& h) {
@@ -383,5 +423,6 @@ int main(int, char**) {
             while (SDL_PollEvent(&e)) Dispatch(e);
         }
         touch::Pump();
+        ReloadSettingsIfChanged();
     }
 }

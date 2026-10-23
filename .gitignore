@@ -11,6 +11,8 @@
 /.gradle/
 /app/build/
 /app/.cxx/
+/ui/build/
+/uipreview/build/
 /third_party/
 /local.properties
 
@@ -32,6 +34,9 @@ black.toml
 .vs/
 .vscode/
 .idea/
+
+# Kotlin tooling session data
+/.kotlin/
 
 # Local temporary folder
 .local

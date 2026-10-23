@@ -1,11 +1,28 @@
-# Builds the APK and publishes a release for each v* tag. The recompiler needs default.xbe: ci/default.xbe.enc,
-# decrypted with the XBE_KEY secret.
+# Builds the full APK with the native renderer and the recompiled game.
+#
+# Runs:
+#  - v* tag: builds and publishes a release, as before.
+#  - manual: Actions -> Build -> Run workflow. Pick any branch, tag or commit in the `ref` input; the APK is attached
+#    to the run as an artifact and nothing is published. This is the "preview build from a branch" path for the real
+#    app. It still needs the secrets below: the recompiler cannot run without the decrypted default.xbe.
+#  - pull request: not run here. It needs a 10-90 minute Windows job and the game key; use the UI Preview workflow to
+#    test the interface from a branch without it.
 #
 # Secrets: XBE_KEY (the passphrase of ci/default.xbe.enc), KEYSTORE_BASE64 (the release .jks in base64),
 # KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD. Without the keystore the APK has a debug signature.
 name: Build
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to build (empty: the branch this run was started from)"
+        type: string
+        default: ""
+      version:
+        description: "Version name (empty: the v* tag, or preview-<run> for a manual build)"
+        type: string
+        default: ""
   push:
     tags: ["v*"]
 
@@ -14,6 +31,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -24,8 +42,10 @@ jobs:
       CMAKE_VERSION: 3.31.6
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out the chosen ref
+        uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
           fetch-depth: 0  # the tags and commits, for the list of changes since the previous release
 
       - uses: actions/setup-java@v5
@@ -43,7 +63,10 @@ jobs:
         env:
           XBE_KEY: ${{ secrets.XBE_KEY }}
         run: |
-          if [ -z "$XBE_KEY" ]; then echo "::error::The XBE_KEY secret is missing"; exit 1; fi
+          if [ -z "$XBE_KEY" ]; then
+            echo "::error::The XBE_KEY secret is missing. The full build needs XBE_KEY and the four KEYSTORE_* secrets; add them in Settings -> Secrets and variables -> Actions. The UI Preview workflow needs no game key."
+            exit 1
+          fi
           mkdir -p assets
           # through a file: Git Bash rewrites an environment value that looks like a path (the key may start with /)
           # before a Windows program such as openssl sees it
@@ -73,9 +96,24 @@ jobs:
       - name: Version
         id: version
         shell: bash
+        env:
+          INPUT_REF: ${{ github.event.inputs.ref }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          name="${GITHUB_REF_NAME#v}"
+          if [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF_TYPE" = "tag" ] && [[ "$GITHUB_REF_NAME" == v* ]]; then
+            name="${GITHUB_REF_NAME#v}"
+            source="tag $GITHUB_REF_NAME"
+          else
+            name="${INPUT_VERSION:-preview-${GITHUB_RUN_NUMBER}}"
+            source="${INPUT_REF:-$GITHUB_REF_NAME}"
+          fi
+          # the version goes into the APK and artifact names: keep it to characters those accept
+          name=$(printf '%s' "$name" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9._-]+/-/g; s/^[-._]+//; s/[-._]+$//')
+          [ -z "$name" ] && name="preview-${GITHUB_RUN_NUMBER}"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "do_release=$([[ "$EVENT_NAME" = "push" ]] && [[ "$GITHUB_REF_TYPE" = "tag" ]] && [[ "$GITHUB_REF_NAME" == v* ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "GRADLE_ARGS=-PversionCode=${{ github.run_number }} -PversionName=$name" >> "$GITHUB_ENV"
 
       - name: Build
@@ -91,8 +129,39 @@ jobs:
           name: Black-${{ steps.version.outputs.name }}
           path: Black-${{ steps.version.outputs.name }}.apk
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Run summary
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+          SOURCE: ${{ steps.version.outputs.source }}
+          DO_RELEASE: ${{ steps.version.outputs.do_release }}
+          APK: Black-${{ steps.version.outputs.name }}.apk
+        run: |
+          sha=$(sha256sum "$APK" | cut -d' ' -f1)
+          size=$(stat -c %s "$APK")
+          commit=$(git rev-parse --short=7 HEAD)
+          {
+            echo "## Black for Android \`$VERSION\`"
+            echo
+            echo "- Source: $SOURCE at \`$commit\`"
+            echo "- APK: \`$APK\` ($size bytes)"
+            echo "- SHA-256: \`$sha\`"
+            echo
+            echo "**Download:** open the **Artifacts** section at the bottom of this run page."
+            echo
+            echo '```'
+            echo "adb install -r $APK"
+            echo '```'
+            if [ "$DO_RELEASE" != "true" ]; then
+              echo
+              echo "Manual build: nothing was published. Merge the branch and push a \`v*\` tag to make a release."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Release notes
+        if: steps.version.outputs.do_release == 'true'
         shell: bash
         run: |
           apk="Black-${{ steps.version.outputs.name }}.apk"
@@ -110,6 +179,7 @@ jobs:
           } >> "$RUNNER_TEMP/release-notes.md"
 
       - name: Release
+        if: steps.version.outputs.do_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: Black for Android ${{ github.ref_name }}

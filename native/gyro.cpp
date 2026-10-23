@@ -25,10 +25,11 @@ constexpr float kDeadZone = 0.015f;        // radians a second: a hand held stil
 constexpr const char* kNames[kModes] = {"OFF", "ON", "FIRE"};
 
 std::atomic<uint32_t> g_mode{kOff};
-float g_sensitivity = 1.5f;  // view degrees per degree the phone turns
-bool g_invert_x = false;     // a turn left looks right
-bool g_invert_y = false;     // a tilt up looks down
-bool g_loaded = false;
+// the settings below are read on the main thread while the game thread applies a reload: each one is atomic
+std::atomic<float> g_sensitivity{1.5f};  // view degrees per degree the phone turns
+std::atomic<bool> g_invert_x{false};     // a turn left looks right
+std::atomic<bool> g_invert_y{false};     // a tilt up looks down
+std::atomic<bool> g_loaded{false};
 SDL_Sensor* g_sensor = nullptr;
 bool g_no_sensor = false;   // the phone has no gyroscope
 bool g_pad_gyro = false;    // a controller's is on
@@ -38,22 +39,28 @@ uint64_t g_pad_last_ns = 0;
 std::filesystem::path File() { return app::ExeDir() / "android.toml"; }
 
 void Load() {
-    g_loaded = true;
+    float sensitivity = g_sensitivity;
+    bool invert_x = g_invert_x;
+    bool invert_y = g_invert_y;
     try {
         toml::table t = toml::parse_file(File().string());
         g_mode = std::min<uint32_t>(t["gyro"].value_or(uint32_t(kOff)), kModes - 1);
-        g_sensitivity = float(t["gyro_sensitivity"].value_or(double(g_sensitivity)));
-        g_invert_x = t["gyro_invert_x"].value_or(g_invert_x);
-        g_invert_y = t["gyro_invert_y"].value_or(g_invert_y);
+        sensitivity = float(t["gyro_sensitivity"].value_or(double(sensitivity)));
+        invert_x = t["gyro_invert_x"].value_or(invert_x);
+        invert_y = t["gyro_invert_y"].value_or(invert_y);
     } catch (...) {
     }
+    g_sensitivity = sensitivity;
+    g_invert_x = invert_x;
+    g_invert_y = invert_y;
+    g_loaded = true;
 }
 
 void Save() {
     toml::table t{{"gyro", int64_t(g_mode.load())},
-                  {"gyro_sensitivity", double(g_sensitivity)},
-                  {"gyro_invert_x", g_invert_x},
-                  {"gyro_invert_y", g_invert_y}};
+                  {"gyro_sensitivity", double(g_sensitivity.load())},
+                  {"gyro_invert_x", g_invert_x.load()},
+                  {"gyro_invert_y", g_invert_y.load()}};
     std::ofstream(File()) << t << "\n";
 }
 
@@ -73,6 +80,12 @@ SDL_SensorID FindGyro() {
 uint32_t CurrentMode() {
     if (!g_loaded) Load();
     return g_mode;
+}
+
+// after the Control Center wrote android.toml
+void Reload() {
+    g_loaded = false;
+    Load();
 }
 
 // the game's options menu (src/common/menu.cpp) sets these; saved at once

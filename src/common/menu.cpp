@@ -52,6 +52,7 @@ void StepSkin(int step);
 // native/update.cpp: the activity asks GitHub for a newer release and says what it found
 namespace host {
 void CheckForUpdates();
+void OpenControlCenter();
 }  // namespace host
 
 namespace app {
@@ -833,9 +834,14 @@ void DrawFooter(float em) {
     else if (g_page == kCheatsPage) hint = "A weapon replaces the one not in hand, gold names are held";
     ImGui::TextUnformatted(Ui(hint, false).c_str());
     ImGui::PopStyleColor();
-    float bw = em * 8;
-    float buttons_pad = ImGui::GetContentRegionAvail().x - bw * 2 - ImGui::GetStyle().ItemSpacing.x;
+    float bw = em * 9;
+    float buttons_pad = ImGui::GetContentRegionAvail().x - bw * 3 - ImGui::GetStyle().ItemSpacing.x * 2;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(buttons_pad, 0.0f));
+    if (ImGui::Button(Ui("CONTROL CENTER", false).c_str(), ImVec2(bw, 0))) {
+        ToggleMenu();
+        host::OpenControlCenter();
+    }
+    ImGui::SameLine();
     if (ImGui::Button(Ui("Back", false).c_str(), ImVec2(bw, 0))) ToggleMenu();
     ImGui::SameLine();
     if (ImGui::Button(Ui("Defaults", false).c_str(), ImVec2(bw, 0))) Defaults();

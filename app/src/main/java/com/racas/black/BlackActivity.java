@@ -129,6 +129,17 @@ public class BlackActivity extends SDLActivity {
         }
     }
 
+    // the CONTROL CENTER button in the in-game panel, from the game's thread: the Compose activity comes over the
+    // game and pauses it; on the way back the native loop reloads the settings it wrote
+    public void openControlCenter() {
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            Intent i = new Intent(this, SettingsActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(i);
+        });
+    }
+
     // CHECK FOR UPDATES in the options menu, from the game's thread: the answer always shows, up to date or offline
     public void checkForUpdates() {
         runOnUiThread(() -> {
