@@ -47,6 +47,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
           fetch-depth: 0  # the tags and commits, for the list of changes since the previous release
+          persist-credentials: false
 
       - uses: actions/setup-java@v5
         with:
@@ -77,6 +78,7 @@ jobs:
           sha1sum assets/default.xbe
 
       - name: Release key
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -84,7 +86,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then echo "::warning::No release keystore: the APK has a debug signature"; exit 0; fi
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Tagged releases require the release keystore: set KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD, or users on the previous signed APK cannot install this one."
+            exit 1
+          fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           {
             echo "BLACK_KEYSTORE=$RUNNER_TEMP/release.jks"

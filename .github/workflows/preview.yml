@@ -61,6 +61,8 @@ jobs:
           # inputs are empty for tag and pull request runs, so those fall back to the event's ref
           ref: ${{ github.event.inputs.ref || github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0  # tags and history for the "What's changed" list
+          # PR code runs in this job: it must not get a token it can push with
+          persist-credentials: false
 
       - uses: actions/setup-java@v5
         with:
@@ -139,6 +141,8 @@ jobs:
           fi
 
       - name: Preview key
+        # a pull request runs its own Gradle build: never hand it the signing key (fork PRs do not get secrets anyway)
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.PREVIEW_KEYSTORE_BASE64 }}
