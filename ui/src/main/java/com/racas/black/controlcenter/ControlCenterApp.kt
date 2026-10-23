@@ -6,14 +6,12 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,26 +19,29 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Gamepad
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Monitor
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VolumeUp
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,10 +59,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -73,13 +74,19 @@ enum class ControlSection(val id: String, val title: String, val icon: ImageVect
     Home("home", "Overview", Icons.Rounded.Home),
     Display("display", "Display", Icons.Rounded.Monitor),
     Controls("controls", "Controls", Icons.Rounded.Gamepad),
-    Interface("interface", "Interface", Icons.Rounded.Palette),
     Audio("audio", "Audio", Icons.Rounded.VolumeUp),
+    More("more", "More", Icons.Rounded.MoreHoriz),
+    Interface("interface", "Interface", Icons.Rounded.Palette),
     Cheats("cheats", "Cheats", Icons.Rounded.Bolt),
     About("about", "About", Icons.Rounded.Info),
     ;
 
+    // the bar/rail get five destinations; interface, cheats and about live under more
+    val primary: Boolean get() = this in navBar
+
     companion object {
+        val navBar = listOf(Home, Display, Controls, Audio, More)
+
         fun of(id: String?) = entries.firstOrNull { it.id == id } ?: Home
     }
 }
@@ -129,6 +136,8 @@ fun BlackControlCenter(host: ControlCenterHost) {
         }
 
         BackHandler(enabled = editingLayout) { editingLayout = false }
+        // a page reached from more has no bar item of its own, so back returns to more
+        BackHandler(enabled = !editingLayout && !section.primary) { sectionId = ControlSection.More.id }
 
         if (editingLayout) {
             LayoutEditorScreen(
@@ -144,6 +153,15 @@ fun BlackControlCenter(host: ControlCenterHost) {
             return@BlackControlCenterTheme
         }
 
+        val title = if (section == ControlSection.Home) "Control Center" else section.title
+        // topappbar takes a non-null icon slot, so the primary pages pass an empty one
+        val noIcon: @Composable () -> Unit = {}
+        val backToMore: @Composable () -> Unit = {
+            IconButton(onClick = { sectionId = ControlSection.More.id }) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to More")
+            }
+        }
+
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 840.dp
             val useRail = when (prefs.navigation) {
@@ -155,54 +173,52 @@ fun BlackControlCenter(host: ControlCenterHost) {
             val screen: @Composable (Boolean) -> Unit = { compact ->
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    containerColor = Color.Transparent,
                     contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     snackbarHost = {
-                        SnackbarHost(snackbar, Modifier.windowInsetsPadding(WindowInsets.navigationBars))
+                        SnackbarHost(
+                            hostState = snackbar,
+                            modifier = if (compact) Modifier else
+                                Modifier.windowInsetsPadding(WindowInsets.navigationBars),
+                        )
                     },
                     topBar = {
-                        Column {
-                            TopAppBar(
-                                title = {
-                                    Column {
-                                        Text(
-                                            "BLACK",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            letterSpacing = 3.sp,
-                                        )
-                                        Text(
-                                            if (section == ControlSection.Home) "Control Center" else section.title,
-                                            style = MaterialTheme.typography.titleLarge,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    title,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            navigationIcon = if (section.primary) noIcon else backToMore,
+                            actions = {
+                                if (game !is GameStatus.Importing) {
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            flushSettings()
+                                            host.launchGame()
+                                        },
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.PlayArrow,
+                                            contentDescription = if (game is GameStatus.Ready) "Play Black" else "Start game",
                                         )
                                     }
-                                },
-                                actions = {
-                                    if (game !is GameStatus.Importing) {
-                                        Button(
-                                            onClick = {
-                                                flushSettings()
-                                                host.launchGame()
-                                            },
-                                            modifier = Modifier.heightIn(min = 52.dp),
-                                            contentPadding = PaddingValues(horizontal = 18.dp),
-                                        ) {
-                                            Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                                            Spacer(Modifier.width(6.dp))
-                                            Text(if (game is GameStatus.Ready) "Play" else "Start")
-                                        }
-                                        Spacer(Modifier.width(12.dp))
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                                ),
-                                windowInsets = WindowInsets.statusBars,
-                            )
-                            if (compact) CompactTabs(section) { sectionId = it.id }
+                                    Spacer(Modifier.width(12.dp))
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                            ),
+                            windowInsets = WindowInsets.statusBars,
+                        )
+                    },
+                    bottomBar = {
+                        if (compact) {
+                            ControlBottomBar(section) { sectionId = it.id }
                         }
                     },
                 ) { padding ->
@@ -219,10 +235,7 @@ fun BlackControlCenter(host: ControlCenterHost) {
                         ) { current ->
                             when (current) {
                                 ControlSection.Home -> HomeScreen(
-                                    settings = settings,
-                                    prefs = prefs,
                                     game = game,
-                                    update = update,
                                     version = host.appVersion,
                                     preview = host.isPreview,
                                     onPlay = {
@@ -231,9 +244,6 @@ fun BlackControlCenter(host: ControlCenterHost) {
                                     },
                                     onImport = { uri -> host.importGame(uri) },
                                     onRequestStorage = { host.requestStorageAccess() },
-                                    onCheckUpdates = { host.checkForUpdates() },
-                                    onOpenUrl = { host.openUrl(it) },
-                                    onOpenSection = { sectionId = it.id },
                                 )
                                 ControlSection.Display -> DisplayScreen(
                                     settings = settings,
@@ -244,13 +254,21 @@ fun BlackControlCenter(host: ControlCenterHost) {
                                     onSettings = { block -> settings = block(settings) },
                                     onEditLayout = { editingLayout = true },
                                 )
-                                ControlSection.Interface -> InterfaceScreen(
-                                    prefs = prefs,
-                                    onPrefs = { block -> host.preferencesStore.update(block) },
-                                )
                                 ControlSection.Audio -> AudioScreen(
                                     settings = settings,
                                     onSettings = { block -> settings = block(settings) },
+                                )
+                                ControlSection.More -> MoreScreen(
+                                    version = host.appVersion,
+                                    preview = host.isPreview,
+                                    update = update,
+                                    onCheckUpdates = { host.checkForUpdates() },
+                                    onOpenUrl = { host.openUrl(it) },
+                                    onOpenSection = { sectionId = it.id },
+                                )
+                                ControlSection.Interface -> InterfaceScreen(
+                                    prefs = prefs,
+                                    onPrefs = { block -> host.preferencesStore.update(block) },
                                 )
                                 ControlSection.Cheats -> CheatsScreen(
                                     settings = settings,
@@ -259,7 +277,6 @@ fun BlackControlCenter(host: ControlCenterHost) {
                                 ControlSection.About -> AboutScreen(
                                     host = host,
                                     prefs = prefs,
-                                    update = update,
                                     version = host.appVersion,
                                     settings = settings,
                                 )
@@ -295,17 +312,25 @@ fun BlackControlCenter(host: ControlCenterHost) {
                             }
                         },
                     ) {
-                        Spacer(Modifier.weight(0.2f))
-                        ControlSection.entries.forEach { entry ->
+                        Spacer(Modifier.height(8.dp))
+                        ControlSection.navBar.forEach { entry ->
                             NavigationRailItem(
-                                selected = entry == section,
+                                selected = entry == section ||
+                                    (entry == ControlSection.More && !section.primary),
                                 onClick = { sectionId = entry.id },
-                                icon = { Icon(entry.icon, contentDescription = null, modifier = Modifier.size(26.dp)) },
-                                label = { Text(entry.title, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.heightIn(min = 68.dp),
+                                icon = {
+                                    Icon(entry.icon, contentDescription = null, modifier = Modifier.size(26.dp))
+                                },
+                                label = {
+                                    Text(
+                                        entry.title,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                },
                             )
                         }
-                        Spacer(Modifier.weight(1f))
                     }
                     Box(Modifier.weight(1f)) { screen(false) }
                 }
@@ -317,20 +342,16 @@ fun BlackControlCenter(host: ControlCenterHost) {
 }
 
 @Composable
-private fun CompactTabs(selected: ControlSection, onSelect: (ControlSection) -> Unit) {
-    ScrollableTabRow(
-        selectedTabIndex = selected.ordinal,
-        edgePadding = 12.dp,
-        containerColor = MaterialTheme.colorScheme.surface,
-        divider = {},
-    ) {
-        ControlSection.entries.forEach { entry ->
-            Tab(
-                selected = entry == selected,
+private fun ControlBottomBar(selected: ControlSection, onSelect: (ControlSection) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        ControlSection.navBar.forEach { entry ->
+            NavigationBarItem(
+                selected = entry == selected || (entry == ControlSection.More && !selected.primary),
                 onClick = { onSelect(entry) },
-                modifier = Modifier.heightIn(min = 58.dp),
-                text = { Text(entry.title, maxLines = 1) },
-                icon = { Icon(entry.icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+                icon = { Icon(entry.icon, contentDescription = null, modifier = Modifier.size(24.dp)) },
+                label = {
+                    Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
             )
         }
     }

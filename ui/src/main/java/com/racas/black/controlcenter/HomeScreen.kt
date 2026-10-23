@@ -7,6 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,120 +20,64 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.Gamepad
-import androidx.compose.material.icons.rounded.Monitor
-import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
 fun HomeScreen(
-    settings: GameSettings,
-    prefs: InterfacePreferences,
     game: GameStatus,
-    update: UpdateState,
     version: String,
     preview: Boolean,
     onPlay: () -> Unit,
     onImport: (android.net.Uri) -> Unit,
     onRequestStorage: () -> Unit,
-    onCheckUpdates: () -> Unit,
-    onOpenUrl: (String) -> Unit,
-    onOpenSection: (ControlSection) -> Unit,
 ) {
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    // the host accepts both single files and SAF folders; the folder picker is how a game folder gets in
+    val isoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onImport(uri)
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) onImport(uri)
     }
     SettingsPage {
         item {
-            HeroCard(
-                settings = settings,
-                version = version,
-                preview = preview,
-                game = game,
-                onPlay = onPlay,
-                onOpenSection = onOpenSection,
-            )
+            HeroCard(version = version, preview = preview, game = game, onPlay = onPlay)
         }
         item {
             GameCard(
                 game = game,
+                preview = preview,
                 onPlay = onPlay,
-                onImport = { picker.launch(arrayOf("*/*")) },
+                onChooseFolder = { folderPicker.launch(null) },
+                onImportIso = { isoPicker.launch(arrayOf("*/*")) },
                 onRequestStorage = onRequestStorage,
-            )
-        }
-        item {
-            SettingsGroup("At a glance") {
-                NavigationSetting(
-                    "Display",
-                    "${settings.renderPercent}% render · ${settings.fov}° FOV · ${Options.labelFps(settings.fpsCap)}",
-                ) { onOpenSection(ControlSection.Display) }
-                DividerInset()
-                NavigationSetting(
-                    "Touch controls",
-                    "${settings.touchLayout.scale}% size · ${settings.touchLayout.opacity}% opacity · " +
-                        if (settings.touchLayout.isCustom()) "custom layout" else prefsLabel(settings.touchLayout.preset),
-                ) { onOpenSection(ControlSection.Controls) }
-                DividerInset()
-                NavigationSetting(
-                    "Audio",
-                    Options.audioOutputs.getOrElse(settings.audioOutput) { "Automatic" },
-                ) { onOpenSection(ControlSection.Audio) }
-                DividerInset()
-                NavigationSetting(
-                    "Cheats",
-                    if (settings.godMode || settings.infiniteAmmo) "Some cheats are on" else "Off",
-                ) { onOpenSection(ControlSection.Cheats) }
-            }
-        }
-        item {
-            UpdateCard(update = update, version = version, onCheck = onCheckUpdates, onOpenUrl = onOpenUrl)
-        }
-        item {
-            Text(
-                "Settings save automatically. The game picks them up the next time it draws a frame, even if it is " +
-                    "running behind this screen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HeroCard(
-    settings: GameSettings,
     version: String,
     preview: Boolean,
     game: GameStatus,
     onPlay: () -> Unit,
-    onOpenSection: (ControlSection) -> Unit,
 ) {
     val accent = MaterialTheme.colorScheme.primary
     Surface(
@@ -150,20 +97,27 @@ private fun HeroCard(
                 ),
             ),
         ) {
-            Column(Modifier.padding(horizontal = 28.dp, vertical = 26.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                Text(
+                    "BLACK",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Color(0xFFF2E9DA),
+                    letterSpacing = 6.sp,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.size(8.dp))
+                // a flow row so a long version string and the badge wrap at large font scales instead of overflowing
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Text(
-                        "XBOX ORIGINAL · REBUILT FOR ANDROID",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent,
-                        letterSpacing = 2.sp,
+                        "Control Center · $version",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color(0xFFBDB5A8),
                     )
                     if (preview) {
-                        Spacer(Modifier.width(12.dp))
-                        Surface(
-                            color = Color(0xFF2B2518),
-                            shape = RoundedCornerShape(50),
-                        ) {
+                        Surface(color = Color(0xFF2B2518), shape = RoundedCornerShape(50)) {
                             Text(
                                 "UI PREVIEW",
                                 style = MaterialTheme.typography.labelSmall,
@@ -173,68 +127,36 @@ private fun HeroCard(
                         }
                     }
                 }
-                Spacer(Modifier.size(8.dp))
-                Text(
-                    "BLACK",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = Color(0xFFF2E9DA),
-                    letterSpacing = 8.sp,
-                )
-                Text(
-                    "The interface the port should have shipped with.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFBDB5A8),
-                )
-                Spacer(Modifier.size(22.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = onPlay,
-                        modifier = Modifier.heightIn(min = 60.dp),
-                        contentPadding = PaddingValues(horizontal = 26.dp),
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(26.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (game is GameStatus.Ready) "Play Black" else "Set up game",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { onOpenSection(ControlSection.Interface) },
-                        modifier = Modifier.heightIn(min = 60.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF2E9DA)),
-                        border = BorderStroke(1.dp, Color(0xFF6A5A3C)),
-                    ) {
-                        Icon(Icons.Rounded.Palette, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Customize")
-                    }
-                }
                 Spacer(Modifier.size(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    HeroStat("VERSION", version)
-                    HeroStat("RENDER", "${settings.renderPercent}%")
-                    HeroStat("FPS", Options.labelFps(settings.fpsCap))
-                    HeroStat("BUTTONS", "${settings.touchLayout.scale}%")
+                Button(
+                    onClick = onPlay,
+                    modifier = Modifier.heightIn(min = 56.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when {
+                            preview -> "Preview only"
+                            game is GameStatus.Ready -> "Play Black"
+                            else -> "Set up game"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                 }
             }
         }
     }
 }
 
-@Composable
-private fun HeroStat(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8275), letterSpacing = 1.5.sp)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = Color(0xFFE9E1D4))
-    }
-}
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GameCard(
     game: GameStatus,
+    preview: Boolean,
     onPlay: () -> Unit,
-    onImport: () -> Unit,
+    onChooseFolder: () -> Unit,
+    onImportIso: () -> Unit,
     onRequestStorage: () -> Unit,
 ) {
     SettingsGroup("Game files") {
@@ -247,64 +169,65 @@ private fun GameCard(
             }
             is GameStatus.Ready -> Column {
                 SettingRow(
-                    title = "Ready to play",
+                    title = if (preview) "Game files found" else "Ready to play",
                     subtitle = game.path,
                     trailing = {
                         Icon(
                             Icons.Rounded.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(28.dp),
                         )
                     },
                 )
                 DividerInset()
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onPlay, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                CardActions {
+                    Button(onClick = onPlay, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Play")
+                        Text(if (preview) "Preview only" else "Play")
                     }
-                    OutlinedButton(onClick = onImport, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Icon(Icons.Rounded.FolderOpen, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Import another image")
+                    OutlinedButton(onClick = onChooseFolder, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Choose game folder")
+                    }
+                    OutlinedButton(onClick = onImportIso, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Import .iso")
                     }
                 }
             }
             is GameStatus.Missing -> Column {
                 SettingRow(
                     title = "Game files not found",
-                    subtitle = "Put default.xbe and its folders, or an .iso, in the Black folder on your phone.",
+                    subtitle = "Put the game files in the Black folder, or pick them below.",
                     trailing = {
                         Icon(
                             Icons.Rounded.ErrorOutline,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(28.dp),
                         )
                     },
                 )
                 DividerInset()
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (!game.storageGranted) {
-                        InfoBanner(
-                            title = "Storage access needed",
-                            text = "Black reads the game from /storage/emulated/0/Black. Grant all-files access, or " +
-                                "import the image below; the import works without it.",
-                            tonal = true,
-                        )
+                CardActions {
+                    Button(onClick = onChooseFolder, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Choose game folder")
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = onImport, modifier = Modifier.heightIn(min = 56.dp)) {
-                            Icon(Icons.Rounded.FolderOpen, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Import .iso")
-                        }
-                        OutlinedButton(onClick = onRequestStorage, modifier = Modifier.heightIn(min = 56.dp)) {
-                            Text(if (game.storageGranted) "Rescan" else "Allow access")
-                        }
+                    OutlinedButton(onClick = onImportIso, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Import .iso")
                     }
+                    OutlinedButton(onClick = onRequestStorage, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text(if (game.storageGranted) "Rescan" else "Allow access")
+                    }
+                }
+                if (!game.storageGranted) {
+                    Text(
+                        "All-files access lets Black read /storage/emulated/0/Black on its own. Both pickers work " +
+                            "without it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
+                    )
                 }
             }
             is GameStatus.Importing -> Column(Modifier.padding(20.dp)) {
@@ -316,8 +239,7 @@ private fun GameCard(
                 LinearProgressIndicator(progress = { game.progress }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.size(8.dp))
                 Text(
-                    "Copying the disc image. Keep this screen open; the copy is written as .part and renamed when it " +
-                        "finishes.",
+                    "Copying the game files. Keep this screen open.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -327,16 +249,24 @@ private fun GameCard(
                     title = "Could not find or import the game",
                     subtitle = game.message,
                     trailing = {
-                        Icon(Icons.Rounded.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
+                        Icon(
+                            Icons.Rounded.ErrorOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(28.dp),
+                        )
                     },
                 )
                 DividerInset()
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = onImport, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Text("Try again")
+                CardActions {
+                    Button(onClick = onChooseFolder, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Choose game folder")
                     }
-                    OutlinedButton(onClick = onRequestStorage, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Text("Storage settings")
+                    OutlinedButton(onClick = onImportIso, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Import .iso")
+                    }
+                    OutlinedButton(onClick = onRequestStorage, modifier = Modifier.heightIn(min = 52.dp)) {
+                        Text("Rescan")
                     }
                 }
             }
@@ -344,67 +274,16 @@ private fun GameCard(
     }
 }
 
+// flow row rather than one row: the three actions wrap on a phone instead of shrinking below a 48 dp target
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun UpdateCard(
-    update: UpdateState,
-    version: String,
-    onCheck: () -> Unit,
-    onOpenUrl: (String) -> Unit,
-) {
-    SettingsGroup("Updates") {
-        when (update) {
-            UpdateState.Idle -> ActionSetting(
-                title = "Check for updates",
-                subtitle = "You are on $version. The app also checks each time it opens.",
-                button = "Check",
-                icon = Icons.Rounded.Refresh,
-                onClick = onCheck,
-            )
-            UpdateState.Checking -> SettingRow(
-                "Checking GitHub…",
-                "Looking for a newer release.",
-                trailing = { LinearProgressIndicator(Modifier.width(120.dp)) },
-            )
-            UpdateState.Latest -> SettingRow(
-                "You are up to date",
-                "The latest release is installed.",
-                trailing = { Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.primary) },
-            )
-            is UpdateState.Available -> Column {
-                SettingRow(
-                    title = update.name.ifBlank { update.tag },
-                    subtitle = update.changes.ifBlank { "A newer release is available." },
-                )
-                DividerInset()
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = { onOpenUrl(update.apk ?: update.page) },
-                        modifier = Modifier.heightIn(min = 56.dp),
-                    ) {
-                        Icon(Icons.Rounded.Download, null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Download")
-                    }
-                    TextButton(onClick = { onOpenUrl(update.page) }, modifier = Modifier.heightIn(min = 56.dp)) {
-                        Text("Release notes")
-                    }
-                }
-            }
-            is UpdateState.Failed -> Column {
-                SettingRow(
-                    "Update check failed",
-                    update.message,
-                    trailing = { Icon(Icons.Rounded.SystemUpdate, null, tint = MaterialTheme.colorScheme.error) },
-                )
-                DividerInset()
-                ActionSetting("Try again", "GitHub could not be reached.", "Check", Icons.Rounded.Refresh, onClick = onCheck)
-            }
-        }
-    }
-}
-
-private fun prefsLabel(preset: String): String = when (preset) {
-    "three" -> "3 finger"
-    "four" -> "4 finger"
-    else -> "default layout"
+private fun CardActions(content: @Composable FlowRowScope.() -> Unit) {
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        content = content,
+    )
 }

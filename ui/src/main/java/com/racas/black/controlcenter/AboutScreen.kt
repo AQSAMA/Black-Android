@@ -9,11 +9,9 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,7 +27,6 @@ private const val RELEASES_URL = "$PROJECT_URL/releases"
 fun AboutScreen(
     host: ControlCenterHost,
     prefs: InterfacePreferences,
-    update: UpdateState,
     version: String,
     settings: GameSettings,
 ) {
@@ -65,50 +62,6 @@ fun AboutScreen(
                     title = "Theme in use",
                     subtitle = "${prefs.themeMode.label} · ${prefs.accent.label} · ${(prefs.uiScale * 100).toInt()}%",
                 )
-            }
-        }
-        item {
-            SettingsGroup("Updates") {
-                when (update) {
-                    UpdateState.Idle -> ActionSetting(
-                        title = "Check for updates",
-                        subtitle = "Asks GitHub for the newest release of Black.",
-                        button = "Check",
-                        icon = Icons.Rounded.Refresh,
-                        onClick = { host.checkForUpdates() },
-                    )
-                    UpdateState.Checking -> SettingRow(
-                        title = "Checking…",
-                        subtitle = "Asking GitHub for the latest release.",
-                    )
-                    UpdateState.Latest -> SettingRow(
-                        title = "You are up to date",
-                        subtitle = "Version $version is the newest release.",
-                    )
-                    is UpdateState.Available -> Column {
-                        SettingRow(
-                            title = update.name.ifBlank { update.tag },
-                            subtitle = update.changes.ifBlank { "A newer release is available." },
-                        )
-                        DividerInset()
-                        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(onClick = { host.openUrl(update.apk ?: update.page) }) {
-                                Icon(Icons.Rounded.OpenInNew, contentDescription = null)
-                                Text("  Download")
-                            }
-                            OutlinedButton(onClick = { host.openUrl(update.page) }) {
-                                Text("Release notes")
-                            }
-                        }
-                    }
-                    is UpdateState.Failed -> ActionSetting(
-                        title = "Update check failed",
-                        subtitle = update.message,
-                        button = "Try again",
-                        icon = Icons.Rounded.Refresh,
-                        onClick = { host.checkForUpdates() },
-                    )
-                }
             }
         }
         item {
