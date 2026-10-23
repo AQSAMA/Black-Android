@@ -78,7 +78,9 @@ jobs:
           sha1sum assets/default.xbe
 
       - name: Release key
-        if: startsWith(github.ref, 'refs/tags/v')
+        # a manual run signs with the same key too, so a personal build updates over the previous one; a tag still
+        # requires it, because users on the previous signed APK could not install this one otherwise
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -87,8 +89,12 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Tagged releases require the release keystore: set KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD, or users on the previous signed APK cannot install this one."
-            exit 1
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              echo "::error::Tagged releases require the release keystore: set KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD, or users on the previous signed APK cannot install this one."
+              exit 1
+            fi
+            echo "::warning::No keystore secrets: this manual build gets a debug signature."
+            exit 0
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           {
