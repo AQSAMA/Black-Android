@@ -1,6 +1,7 @@
 package com.racas.black
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
@@ -43,6 +44,7 @@ import java.util.Locale
 class SettingsActivity : ComponentActivity() {
 
     private lateinit var host: AppHost
+    private var askedStorage = false  // the explanation is shown once a launch, not on every return to the screen
 
     private val storagePermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (::host.isInitialized) host.refreshGameStatus()
@@ -59,13 +61,48 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::host.isInitialized) host.refreshGameStatus()
+        if (::host.isInitialized) {
+            host.refreshGameStatus()
+            if (!askedStorage) {
+                askedStorage = true
+                explainStorageIfNeeded()
+            }
+        }
     }
 
     internal fun askForStoragePermission() {
         storagePermission.launch(
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
         )
+    }
+
+    // the Control Center is the launcher, so this is the first screen the player sees: when the game files are out of
+    // reach it says why and offers the access page, instead of leaving them with a screen about missing files
+    private fun explainStorageIfNeeded() {
+        val game = host.gameStatus.value
+        if (game !is GameStatus.Missing || game.storageGranted) return
+        AlertDialog.Builder(this)
+            .setTitle("Storage access needed")
+            .setMessage(
+                if (Build.VERSION.SDK_INT >= 30) {
+                    "Black Android reads the game from the Black folder on your phone's storage:\n\n" +
+                        "/storage/emulated/0/Black\n\n" +
+                        "On the next screen, turn on \"Allow access to manage all files\" for Black Android, then " +
+                        "come back. The app cannot see your game files without it.\n\n" +
+                        "You can also tap \"Choose game folder\" on the Home screen and the app copies the game " +
+                        "files for you."
+                } else {
+                    "Black Android reads the game from the Black folder on your phone's storage:\n\n" +
+                        "/storage/emulated/0/Black\n\n" +
+                        "On the next screen, allow Black Android to access your storage, then come back. The app " +
+                        "cannot see your game files without it.\n\n" +
+                        "You can also tap \"Choose game folder\" on the Home screen and the app copies the game " +
+                        "files for you."
+                },
+            )
+            .setPositiveButton("Allow access") { _, _ -> host.requestStorageAccess() }
+            .setNegativeButton("Not now", null)
+            .show()
     }
 }
 
@@ -129,16 +166,66 @@ private class AppHost(private val activity: SettingsActivity) : ControlCenterHos
     }
 
     override fun importGame(uri: Uri) {
-        val name = displayName(uri)
-        _game.value = GameStatus.Importing(name, 0f)
         val target = if (hasStorageAccess()) {
             File(Environment.getExternalStorageDirectory(), "Black")
         } else {
             File(activity.getExternalFilesDir(null), "assets")
         }
+        if (GameImporter.isTree(uri)) {
+            importTree(uri, target)
+            return
+        }
+        val name = displayName(uri)
+        _game.value = GameStatus.Importing(name, 0f)
         importer.copy(uri, target) { _ ->
             _game.value = scanGame()
         }
+    }
+
+    // a folder picked with Android's folder picker: the game's own folder is just looked in again; any other folder is
+    // copied into the one the game reads. The copy is read through the picker's own grant, so it needs no storage
+    // access, but writing into /storage/emulated/0/Black does.
+    private fun importTree(uri: Uri, target: File) {
+        val picked = GameImporter.treeFolder(uri)
+        val same = picked != null && sameFile(picked, target)
+        val overlapping = picked != null && (inside(target, picked) || inside(picked, target))
+        // the game's own folder, or the folder above it, or one inside it: copying would walk the game's own folder
+        // into itself, so the folders are looked in again instead. a known folder that the app cannot read directly
+        // (no all-files access) is read through the picker's grant and copied into the app's own folder, which needs
+        // no access: both pickers work without it, as the Home screen says.
+        if (same || overlapping || (picked != null && isGameFolder(picked))) {
+            _game.value = scanGame()
+            if (_game.value is GameStatus.Ready) return
+            if (same || overlapping || hasStorageAccess()) {
+                toast(
+                    if (!hasStorageAccess()) {
+                        "Allow storage access so Black Android can read that folder."
+                    } else {
+                        "That folder has no game files yet. Pick the one with default.xbe or the disc image."
+                    },
+                )
+                return
+            }
+        }
+        _game.value = GameStatus.Importing(importer.treeName(uri), 0f)
+        importer.copyTree(uri, target) { _ ->
+            _game.value = scanGame()
+        }
+    }
+
+    private fun isGameFolder(folder: File): Boolean =
+        gameFolders().any { sameFile(it, folder) || sameFile(File(it, "assets"), folder) }
+
+    private fun sameFile(a: File, b: File): Boolean = try {
+        a.canonicalPath == b.canonicalPath
+    } catch (e: Exception) {
+        a.absolutePath == b.absolutePath
+    }
+
+    private fun inside(child: File, parent: File): Boolean {
+        val c = child.absolutePath
+        val p = parent.absolutePath
+        return c == p || c.startsWith(p + File.separator)
     }
 
     override fun launchGame() {
