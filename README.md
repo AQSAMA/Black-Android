@@ -1,5 +1,5 @@
 # Black for Android
-An unofficial native Android port of the original Xbox version of *Black*, with touch controls, gyroscope aiming, controller support and extended graphics options.
+An unofficial native Android port of the original Xbox version of *Black*, with touch controls, gyroscope aiming, controller support, extended graphics options and a Material 3 **Control Center** for setting it all up.
 
 The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-Recomp](https://github.com/TGP482/XboxXBE-Recomp), then built for arm64. Drawing goes through Vulkan, and windowing, input and audio through SDL3. No emulator is involved.
 
@@ -16,15 +16,25 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
 
 ## Installation
 1. Install the APK.
-2. Open **Black Android** and allow **all files access** when it asks (on Android 10, the **storage** permission).
-3. Copy the game into `/storage/emulated/0/Black`, or into a `Black` folder at the top of your SD card: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder on the phone's storage once access is allowed, and starts the game as soon as it finds the files.
+2. Open **Black Android**. The **Control Center** opens first: allow **all files access** when it asks (on Android 10, the **storage** permission).
+3. Copy the game into `/storage/emulated/0/Black`, or into a `Black` folder at the top of your SD card: the USA or Europe release, either as a disc image (`.iso`) or as `default.xbe` with its data folders. The app creates the folder on the phone's storage once access is allowed, and the Control Center shows the game as ready as soon as it finds the files.
+4. Tap **Play** to start the game. While playing, the pause menu's **CONTROL CENTER** button brings the settings back over the game.
 
 If you don't grant that access, `Android/data/com.racas.black/files/assets` works too.
 
 Settings (`black.toml`, `android.toml`, `layout.toml`), saves (`hdd`), logs and the shader cache are stored in `Android/data/com.racas.black/files`.
 
 ## Features
-The settings are in the game's own options menu, each page under its own button: **Graphics**, **Touch Controls**, **General**, **Mouse and Keyboard** and **Cheats**. Within a page the settings are grouped under headings, and arrows above and below the list show there is more to scroll to; tap them to move the list one row. In the pause menu, the *Page* row switches between the pages. Android's back button opens the pause menu.
+The **Control Center** is the app's front end: it opens when you launch Black Android and from **CONTROL CENTER** in the pause menu. It edits the same `black.toml`, `android.toml` and `layout.toml` the renderer reads, and a running game picks the changes up without a restart. Rows, sliders, switches and buttons are sized for touch, and the interface itself is adjustable.
+
+### Control Center
+- **Overview**: whether the game files were found, importing a disc image or a `default.xbe` folder, **Play**, update checks, and sharing or exporting the settings as TOML.
+- **Display**, **Controls**, **Audio** and **Cheats**: the port's settings gathered under large, plain-language pages, each with its own reset button.
+- **Interface**: OLED black, dark or system theme; eight accent colours; square or round corners; high contrast; interface and text scale; bottom tabs or a side rail on wide screens; haptics, reduced motion and keep-screen-on.
+- **Layout editor**: a full-screen preview of the touch controls. Drag any control, resize it with a slider or a pinch, hide the ones you do not use, and save the layout back to the game. The optional top-left fire zone is a wide rectangle that can be dragged and resized like the round buttons.
+- **Back and Play** behave as expected: back leaves the Control Center, and the **Play** button in the top bar returns to the game.
+
+The game's own options remain available in the pause menu, grouped into **Graphics**, **Touch Controls**, **General**, **Mouse and Keyboard** and **Cheats**. Each page has headings and arrows above and below the list to show there is more to scroll to; tap an arrow to move one row, or hold it to keep going.
 
 ### Graphics
 - **Display**
@@ -42,11 +52,13 @@ The settings are in the game's own options menu, each page under its own button:
   - **Reload Blur**: turns the blur while reloading on or off.
 
 ### Touch Controls
-- **Touch**: the left side of the screen is a movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing. The controls hide over loading screens and cutscenes.
+- **Touch**: the left side of the screen is a floating movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing. The controls hide over loading screens and cutscenes.
+- **Modern controls**: the default button style is dark glass with a thin rim and warm ink, a soft shadow, and an accent fill while a button is held. The movement stick is a floating ring with a small knob and compass ticks. *Xbox* (the skin's icons with the Xbox controller's marks), *Clean* and *Classic* remain available.
+- **Fire zone**: an optional wide fire rectangle in the top-left corner for the left index finger. It is off by default, switched on under **Controls → Top-left fire zone**, and then dragged or resized in the editor like any other control.
 - **Menus**: a D-pad and a back button move through the menus and the options; tap an arrow to step one row, or hold it to keep going.
 - **Touch Sensitivity**: how fast a drag turns the view, separate from the mouse's sensitivity.
-- **Controls Layout**: pick a preset (*Default*, *3 Finger* or *4 Finger*) and set the controls' opacity and overall size.
-- **Button Style**: *Xbox* (the skin's icons with the Xbox controller's A, B, X, Y and other button marks), *Clean* (the same icons without them) or *Classic* (the original drawn icons).
+- **Controls Layout**: pick a preset (*Default* for two thumbs, *3 Finger* or *4 Finger*) and set the controls' opacity and overall size. Each preset only shows the controls that grip needs, and every position remains editable.
+- **Button Style**: *Modern* (the default glass controls), *Xbox* (the skin's icons with the Xbox controller's A, B, X, Y and other button marks), *Clean* (the same icons without them) or *Classic* (the original drawn icons).
 - **Edit Controls Position**: drag each control where you want it. To resize one, select it and tap **−** or **+**, or pinch it with a second finger.
 - **Motion Controls**: aim with the gyroscope by turning the phone, or a DualShock 4 or DualSense on Android 12 and newer, either always or only while firing, with adjustable sensitivity. The controller's gyroscope is used while you play with the controller, the phone's while you use the touch screen.
 
@@ -96,6 +108,15 @@ Install the APK with:
 ```
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
+
+### 5. Build the Control Center preview (any OS)
+The Control Center can be built as a standalone preview APK, `com.racas.black.preview`, without Windows, the NDK, the recompiled game or any game data:
+```
+./gradlew -PpreviewOnly :uipreview:assembleRelease
+```
+The APK is at `uipreview/build/outputs/apk/release/uipreview-release.apk`. It runs against demo settings: the screens, theme and layout editor work, but **Play** only explains that the preview does not include the game. It installs beside the full app.
+
+Pushing a tag that starts with `preview-v` runs `.github/workflows/preview.yml`, which builds the APK and publishes it as a prerelease. To sign it with your own key, add the repository secrets `PREVIEW_KEYSTORE_BASE64`, `PREVIEW_KEYSTORE_PASSWORD`, `PREVIEW_KEY_ALIAS` and `PREVIEW_KEY_PASSWORD`; without them the workflow produces a debug-signed APK that still installs.
 
 ## Credits
 - [XboxXBE-Recomp](https://github.com/TGP482/XboxXBE-Recomp) by TGP482: the static recompiler and the portable runtime (Xbox kernel, XDK libraries and Direct3D 8) this port is built on.

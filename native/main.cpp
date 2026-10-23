@@ -14,6 +14,7 @@
 #include <cstring>
 #include <ctime>
 #include <cwchar>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <sstream>
@@ -77,6 +78,28 @@ void SetForeground(bool on) {
     }
     g_foreground_cv.notify_all();
     LOGI("app: %s", on ? "in front" : "in the background");
+}
+
+// The Control Center writes the game's TOML files and touches .settings-changed last. Reading the marker's stamp
+// keeps this cheap on every turn of the loop; the game's own option pages do not touch it, so they never reload
+// their own save.
+void ReloadSettingsIfChanged() {
+    // the loop runs at frame rate; a marker check four times a second is soon enough for a settings change
+    static auto next = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    if (now < next) return;
+    next = now + std::chrono::milliseconds(250);
+    static std::string seen;
+    std::ifstream in(app::ExeDir() / ".settings-changed");
+    if (!in) return;
+    std::string stamp;
+    std::getline(in, stamp);
+    if (stamp.empty() || stamp == seen) return;
+    seen = stamp;
+    app::Load();
+    touch::ReloadLayout();
+    gyro::Reload();
+    LOGI("settings: reloaded from the Control Center");
 }
 
 // SDL's display mode in landscape: the window is not up yet when the settings load
@@ -383,5 +406,6 @@ int main(int, char**) {
             while (SDL_PollEvent(&e)) Dispatch(e);
         }
         touch::Pump();
+        ReloadSettingsIfChanged();
     }
 }

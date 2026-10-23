@@ -75,6 +75,12 @@ uint32_t CurrentMode() {
     return g_mode;
 }
 
+// after the Control Center wrote android.toml
+void Reload() {
+    g_loaded = false;
+    Load();
+}
+
 // the game's options menu (src/common/menu.cpp) sets these; saved at once
 void SetMode(uint32_t mode) {
     if (!g_loaded) Load();

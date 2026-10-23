@@ -21,6 +21,8 @@ uint32_t SurfaceEpoch();
 void WaitForeground();
 // the window's size in pixels
 void WindowPixels(int& w, int& h);
+// the Compose Control Center over the game: its own activity, the game pauses while it is up
+void OpenControlCenter();
 
 }  // namespace host
 
@@ -55,6 +57,8 @@ void StepOpacity(int step);
 uint32_t ControlsSize();  // percent of each control's own size
 void StepSize(int step);
 void EditLayout();  // the controls over the screen to drag where they go
+// after layout.toml changed outside the game: the next draw uses the new places, preset, skin and opacity
+void ReloadLayout();
 const char* SkinName();  // the buttons' look: CLASSIC (drawn), XBOX or CLEAN (the skin's images)
 void StepSkin(int step);
 // render thread, once: the skins' atlas as RGBA from the APK's assets, then its ImGui texture
@@ -70,6 +74,8 @@ const char* ModeName();
 void NextMode();  // off, always on, while firing; saved at once
 void OnEvent(const SDL_Event& e);
 void Pump();  // the sensor opened while a mode wants it, closed otherwise
+// after android.toml changed outside the game
+void Reload();
 }  // namespace gyro
 
 // ImGui's input from SDL's events (ui.cpp), main thread, under app::UiLock

@@ -11,6 +11,8 @@
 /.gradle/
 /app/build/
 /app/.cxx/
+/ui/build/
+/uipreview/build/
 /third_party/
 /local.properties
 

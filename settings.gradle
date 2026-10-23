@@ -12,4 +12,7 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Black Android"
-include ":app"
+include ":ui", ":uipreview"
+// The preview APK only needs the UI module. Keeping :app out of the graph lets it build on Linux without the NDK,
+// Windows toolchain or game data the native app needs.
+if (!gradle.startParameter.projectProperties.containsKey("previewOnly")) include ":app"

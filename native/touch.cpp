@@ -139,7 +139,7 @@ constexpr Name kNames[] = {
     {'S', "S"}, {'T', "T"}, {'U', "U"}, {'V', "V"}, {'W', "W"}, {'X', "X"}, {'Y', "Y"}, {'Z', "Z"},
     {'0', "0"}, {'1', "1"}, {'2', "2"}, {'3', "3"}, {'4', "4"}, {'5', "5"}, {'6', "6"}, {'7', "7"}, {'8', "8"},
     {'9', "9"},
-    {VK_F1, "F1"}, {VK_F2, "F2"}, {VK_F4, "F4"}, {VK_F5, "F5"}, {VK_F6, "F6"}, {VK_F7, "F7"},
+    {VK_F1, "F1"}, {VK_F2, "F2"}, {VK_F3, "F3"}, {VK_F4, "F4"}, {VK_F5, "F5"}, {VK_F6, "F6"}, {VK_F7, "F7"},
     {VK_F8, "F8"}, {VK_F9, "F9"}, {VK_F10, "F10"}, {VK_F11, "F11"}, {VK_F12, "F12"},
     {VK_NUMPAD0, "Numpad0"}, {VK_NUMPAD1, "Numpad1"}, {VK_NUMPAD2, "Numpad2"}, {VK_NUMPAD3, "Numpad3"},
     {VK_NUMPAD4, "Numpad4"}, {VK_NUMPAD5, "Numpad5"}, {VK_NUMPAD6, "Numpad6"}, {VK_NUMPAD7, "Numpad7"},
@@ -525,6 +525,7 @@ struct Button {
     When when;
     bool look = false;  // a drag from it turns the view as well, as a fire button does
     bool keep = false;  // never hidden: the way back out of the menus
+    bool rect = false;  // drawn as a wide rounded rectangle rather than a circle
 };
 // the layout is set in the game's options (Recomp Settings, TOUCH): its preset, opacity, size, and the editor that
 // moves the controls, see the functions at the end
@@ -556,8 +557,11 @@ constexpr Button kButtons[] = {
     {"enter", "Enter", Icon::Enter, kAnalogA, When::Menus},
     // the firing mode's button again, beside use while a scope is up: the scope's level, X2 or X5, and a tap switches
     {"zoom", "Scope zoom", Icon::Zoom, kBit + 0, When::Play},
+    // a wide primary fire button for the left index finger; hidden until switched on, so the two-finger defaults stay
+    // uncluttered. r is half its height and its width is kFireZoneAspect times that
+    {"fire_zone", "Fire zone", Icon::Bullet, kAnalogRT, When::Play, true, false, true},
 };
-constexpr size_t kZoomButton = std::size(kButtons) - 1;
+constexpr size_t kZoomButton = std::size(kButtons) - 2;
 constexpr float kScoped = 0.6f;  // game::g_zoom under this is a scope's, not a rifle's sights
 constexpr float kScopeX5 = 0.36f;  // and under this its X5, between X2's 0.5 and X5's 0.25
 constexpr size_t kButtonCount = std::size(kButtons);
@@ -580,6 +584,7 @@ constexpr Layout kTwoFinger = {{
     {0.581f, 0.07f, 0.04f},
     {0.92f, 0.78f, 0.07f},
     {0.715f, 0.40f, 0.05f},
+    {0.20f, 0.15f, 0.125f, true},
     {0.108f, 0.70f, 0.12f},
 }};
 // claw with the left index finger: fire at the top left, the right thumb turns and aims
@@ -593,6 +598,7 @@ constexpr Layout kThreeFinger = {{
     {0.581f, 0.07f, 0.04f},
     {0.92f, 0.78f, 0.07f},
     {0.69f, 0.40f, 0.045f},
+    {0.20f, 0.15f, 0.125f, true},
     {0.13f, 0.72f, 0.12f},
 }};
 // both index fingers on top: fire at the top left, aim and crouch at the top right
@@ -606,6 +612,7 @@ constexpr Layout kFourFinger = {{
     {0.581f, 0.07f, 0.04f},
     {0.92f, 0.78f, 0.07f},
     {0.655f, 0.38f, 0.045f},
+    {0.20f, 0.15f, 0.125f, true},
     {0.13f, 0.72f, 0.12f},
 }};
 struct Preset {
@@ -651,15 +658,15 @@ std::atomic<uint64_t> g_touch_ms{0};
 std::atomic<uint64_t> g_back_until{0};  // the back key's tap of Start or B lasts until then
 constexpr uint64_t kBackTapMs = 120;
 
-// the buttons' look: drawn as before, or the images of the skin bagasromadon made (issue #14), with the Xbox
-// controller's letters or without
-enum Skin : uint32_t { kClassic, kXbox, kClean, kSkins };
-constexpr const char* kSkinIds[] = {"classic", "xbox", "clean"};
-constexpr const char* kSkinNames[] = {"CLASSIC", "XBOX", "CLEAN"};
+// the buttons' look: the images of the skin bagasromadon made (issue #14), with the Xbox controller's letters or
+// without, the original drawn buttons, or the modern glass controls the Control Center starts with
+enum Skin : uint32_t { kClassic, kXbox, kClean, kModern, kSkins };
+constexpr const char* kSkinIds[] = {"classic", "xbox", "clean", "modern"};
+constexpr const char* kSkinNames[] = {"CLASSIC", "XBOX", "CLEAN", "MODERN"};
 
 // the layout in use, under g_lock
 Layout g_layout = kTwoFinger;
-uint32_t g_skin = kXbox;
+uint32_t g_skin = kModern;
 size_t g_preset = 0;
 float g_opacity = 0.85f;
 float g_scale = 1.0f;  // every control's size, on top of its own
@@ -698,8 +705,6 @@ void LoadLayout() {
         for (uint32_t i = 0; i < kSkins; i++)
             if (skin == kSkinIds[i]) g_skin = i;
         for (size_t i = 0; i <= kButtonCount; i++) {
-            // the menus' controls are not in the editor: always the preset's
-            if (i != kStick && kButtons[i].when == When::Menus) continue;
             const char* id = i == kStick ? "stick" : kButtons[i].id;
             const toml::table* p = t["controls"][id].as_table();
             if (!p) continue;
@@ -707,7 +712,7 @@ void LoadLayout() {
             pl.x = std::clamp(float((*p)["x"].value_or(double(pl.x))), 0.0f, 1.0f);
             pl.y = std::clamp(float((*p)["y"].value_or(double(pl.y))), 0.0f, 1.0f);
             pl.r = std::clamp(float((*p)["r"].value_or(double(pl.r))), 0.02f, 0.25f);
-            pl.hidden = (*p)["hidden"].value_or(false) && i != kStick && !kButtons[i].keep;
+            pl.hidden = (*p)["hidden"].value_or(pl.hidden) && i != kStick && !kButtons[i].keep;
         }
     } catch (...) {
     }
@@ -758,6 +763,18 @@ void Centre(size_t i, float& cx, float& cy) {
 }
 
 float Radius(size_t i) { return g_layout[i].r * g_scale * Height(); }
+
+// the modern fire rectangle: kFireZoneAspect times as wide as it is high, from its centre and radius
+constexpr float kFireZoneAspect = 1.6f;
+void FireZoneBounds(size_t i, float& x0, float& y0, float& x1, float& y1) {
+    float cx, cy;
+    Centre(i, cx, cy);
+    float hh = Radius(i), hw = hh * kFireZoneAspect;
+    x0 = cx - hw;
+    y0 = cy - hh;
+    x1 = cx + hw;
+    y1 = cy + hh;
+}
 
 // the editor's bar at the top: Reset, smaller and bigger for the picked control, hide or show it, Cancel, Done, in
 // screen shares
@@ -819,6 +836,12 @@ void CloseEditor(bool keep) {
 size_t HitButton(float x, float y) {
     for (size_t i = 0; i < kButtonCount; i++) {
         if (!ButtonShown(i)) continue;
+        if (kButtons[i].rect) {
+            float x0, y0, x1, y1;
+            FireZoneBounds(i, x0, y0, x1, y1);
+            if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return i;
+            continue;
+        }
         float cx, cy;
         Centre(i, cx, cy);
         float r = Radius(i) * 1.25f;  // a little slack around the drawn circle
@@ -1386,8 +1409,8 @@ SkinPart PartOf(Icon icon) {
     }
 }
 
-// the skin's images in use: not CLASSIC, and the atlas loaded
-bool Skinned() { return g_skin != kClassic && g_skin_texture; }
+// the skin's images in use: one of the atlas skins, and the atlas loaded
+bool Skinned() { return (g_skin == kXbox || g_skin == kClean) && g_skin_texture; }
 
 // a part of the skin in use, its circle of radius r about c
 void SkinImage(ImDrawList* dl, SkinPart part, ImVec2 c, float r, ImU32 tint) {
@@ -1414,6 +1437,25 @@ void DrawStick(ImDrawList* dl, float th) {
         SkinImage(dl, kStickBase, at, r, Fade(255, 255, 255, held ? 200 : 150));
         ImVec2 knob(at.x + g_stick_x * r * kTravel, at.y - g_stick_y * r * kTravel);
         SkinImage(dl, kStickKnob, knob, r * kKnob, Fade(255, 255, 255, held ? 255 : 200));
+        return;
+    }
+    if (g_skin == kModern) {
+        // a floating glass stick: a thin ring with compass ticks and a small, solid knob on a short travel
+        constexpr float kKnob = 0.44f, kTravel = 0.55f;
+        dl->AddCircleFilled(ImVec2(at.x, at.y + th * 1.4f), r, Fade(0, 0, 0, 60), 64);
+        dl->AddCircleFilled(at, r, Fade(10, 10, 12, held ? 105 : 70), 64);
+        dl->AddCircle(at, r, Fade(255, 255, 255, held ? 110 : 60), 64, th * 0.9f);
+        for (int i = 0; i < 4; i++) {
+            float a = i * kPi / 2;
+            dl->AddLine(ImVec2(at.x + std::cos(a) * r * 0.77f, at.y + std::sin(a) * r * 0.77f),
+                        ImVec2(at.x + std::cos(a) * r * 0.9f, at.y + std::sin(a) * r * 0.9f),
+                        Fade(255, 255, 255, held ? 120 : 70), th * 0.8f);
+        }
+        ImVec2 knob(at.x + g_stick_x * r * kTravel, at.y - g_stick_y * r * kTravel);
+        dl->AddCircleFilled(ImVec2(knob.x, knob.y + th), r * kKnob, Fade(0, 0, 0, 75), 48);
+        dl->AddCircleFilled(knob, r * kKnob, Fade(228, 228, 234, held ? 58 : 36), 48);
+        dl->AddCircle(knob, r * kKnob, Fade(255, 255, 255, held ? 215 : 145), 48, th * 0.8f);
+        dl->AddCircleFilled(knob, r * 0.1f, Fade(217, 168, 78, held ? 235 : 175), 24);
         return;
     }
     dl->AddCircleFilled(at, r, Fade(0, 0, 0, held ? 80 : 55), 64);
@@ -1458,6 +1500,45 @@ void DrawEditorBar(ImDrawList* dl, float th) {
                 app::Ui("TAP A CONTROL, THEN HIDE OR SHOW").c_str());
 }
 
+// the modern control: dark glass, a thin edge, a soft shadow and the icon in warm ink; the accent fills it while held
+void DrawModernButton(ImDrawList* dl, size_t i, bool on, bool hidden, float th) {
+    float cx, cy;
+    Centre(i, cx, cy);
+    float r = Radius(i) * (on ? 0.93f : 1.0f);
+    int fade = hidden ? 40 : 100;
+    ImU32 fill = on ? Fade(217, 168, 78, 82) : Fade(8, 8, 10, 95 * fade / 100);
+    ImU32 edge = on ? Fade(255, 214, 140, 240) : Fade(255, 255, 255, 92 * fade / 100);
+    dl->AddCircleFilled(ImVec2(cx, cy + th * 1.6f), r, Fade(0, 0, 0, 75 * fade / 100), 48);
+    dl->AddCircleFilled(ImVec2(cx, cy), r, fill, 48);
+    dl->AddCircle(ImVec2(cx, cy), r, edge, 48, th * 0.9f);
+    dl->AddCircle(ImVec2(cx, cy), r * 0.84f, Fade(255, 255, 255, (on ? 50 : 24) * fade / 100), 48, th * 0.5f);
+    DrawIcon({dl, ImVec2(cx, cy), r * 0.66f,
+              on ? Fade(255, 248, 224, 255) : Fade(255, 255, 255, 225 * fade / 100), th * 1.1f},
+             kButtons[i].icon);
+}
+
+// the primary fire zone: a wide, mostly transparent rounded rectangle in the modern style, with its label in the
+// middle so a thumb can find it without looking
+void DrawModernFireZone(ImDrawList* dl, size_t i, bool on, bool hidden, float th) {
+    float x0, y0, x1, y1;
+    FireZoneBounds(i, x0, y0, x1, y1);
+    float h = y1 - y0;
+    float rounding = std::min(h * 0.28f, th * 18.0f);
+    int fade = hidden ? 40 : 100;
+    ImU32 fill = on ? Fade(217, 168, 78, 75) : Fade(8, 8, 10, 55 * fade / 100);
+    ImU32 edge = on ? Fade(255, 214, 140, 230) : Fade(255, 255, 255, 80 * fade / 100);
+    dl->AddRectFilled(ImVec2(x0, y0 + th), ImVec2(x1, y1 + th), Fade(0, 0, 0, 55 * fade / 100), rounding);
+    dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), fill, rounding);
+    dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), edge, rounding, 0, th * 0.9f);
+    float m = h * 0.18f;
+    dl->AddLine(ImVec2(x0 + m, y0 + m), ImVec2(x0 + m * 2.3f, y0 + m), edge, th * 0.7f);
+    dl->AddLine(ImVec2(x0 + m, y0 + m), ImVec2(x0 + m, y0 + m * 2.3f), edge, th * 0.7f);
+    CentredText(dl, ImVec2((x0 + x1) / 2, (y0 + y1) / 2 - h * 0.04f), h * 0.24f,
+                on ? Fade(255, 248, 224, 255) : Fade(240, 214, 154, 235 * fade / 100), app::Ui("FIRE").c_str());
+    CentredText(dl, ImVec2((x0 + x1) / 2, (y0 + y1) / 2 + h * 0.2f), h * 0.075f,
+                Fade(255, 255, 255, 135 * fade / 100), app::Ui("PRIMARY").c_str());
+}
+
 }  // namespace
 
 void Draw() {
@@ -1478,7 +1559,11 @@ void Draw() {
         bool hidden = g_layout[i].hidden;
         bool on = !editing && (g_pressed[i] || (b.press == kGyro && gyro::CurrentMode() != gyro::kOff));
         int fade = hidden ? 40 : 100;  // a hidden control shows faint in the editor
-        if (Skinned()) {
+        if (b.rect) {
+            DrawModernFireZone(dl, i, on, hidden, th);
+        } else if (g_skin == kModern) {
+            DrawModernButton(dl, i, on, hidden, th);
+        } else if (Skinned()) {
             // pressed in a little and lit; the icons the skin has none of (the menus' arrows, the scope's zoom) drawn
             // on its plain circle in its colours
             float k = on ? 0.92f : 1.0f;
@@ -1501,7 +1586,16 @@ void Draw() {
             ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0, mode);
             dl->AddText(ImGui::GetFont(), fs, ImVec2(cx - ts.x / 2, cy + r * 1.08f), Fade(255, 255, 255, 180), mode);
         }
-        if (editing && int(i) == g_selected) dl->AddCircle(ImVec2(cx, cy), r + th * 2, IM_COL32(255, 200, 60, 255), 48, th * 1.5f);
+        if (editing && int(i) == g_selected) {
+            if (b.rect) {
+                float x0, y0, x1, y1;
+                FireZoneBounds(i, x0, y0, x1, y1);
+                dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32(255, 200, 60, 255),
+                            (y1 - y0) * 0.28f, 0, th * 1.5f);
+            } else {
+                dl->AddCircle(ImVec2(cx, cy), r + th * 2, IM_COL32(255, 200, 60, 255), 48, th * 1.5f);
+            }
+        }
         if (editing && hidden) {
             float k = r * 0.6f;
             dl->AddLine(ImVec2(cx - k, cy - k), ImVec2(cx + k, cy + k), IM_COL32(255, 80, 60, 220), th);
@@ -1543,6 +1637,14 @@ const char* LayoutName() {
     std::lock_guard lock(g_lock);
     EnsureLayout();
     return Custom() ? "CUSTOM" : kPresets[g_preset].label;
+}
+
+// after the Control Center wrote layout.toml: the next draw uses the new places, preset, skin and opacity
+void ReloadLayout() {
+    std::lock_guard lock(g_lock);
+    if (g_editing) return;
+    LoadLayout();
+    input::LoadBindings();
 }
 
 // the next or previous preset; from a custom layout first back to its own preset's places, or the one before

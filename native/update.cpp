@@ -21,4 +21,7 @@ static void CallActivity(const char* name) {
 
 void CheckForUpdates() { CallActivity("checkForUpdates"); }
 
+// the Control Center is a Compose activity over the game; BlackActivity starts it on the UI thread
+void OpenControlCenter() { CallActivity("openControlCenter"); }
+
 }  // namespace host
