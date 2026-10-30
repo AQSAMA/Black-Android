@@ -31,6 +31,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -89,19 +94,35 @@ fun LayoutEditorScreen(
     onCancel: () -> Unit,
     onSave: (TouchLayout) -> Unit,
 ) {
-    var working by remember { mutableStateOf(layout) }
+    val editor = rememberSaveable(saver = LayoutEditorState.Saver) { LayoutEditorState(layout) }
+    val working = editor.layout
+    val config = LocalConfiguration.current
+    val aspect = maxOf(config.screenWidthDp, config.screenHeightDp).toFloat() / minOf(config.screenWidthDp, config.screenHeightDp).coerceAtLeast(1)
+    var discard by remember { mutableStateOf(false) }
+    val leave = { if (working != layout) discard = true else onCancel() }
+    if (discard) AlertDialog(
+        onDismissRequest = { discard = false },
+        title = { Text("Discard layout changes?") },
+        text = { Text("Your saved controls will stay as they were.") },
+        confirmButton = { TextButton(onClick = onCancel) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } },
+    )
     var selectedId by rememberSaveable { mutableStateOf<String?>("fire") }
     var menuPreview by rememberSaveable { mutableStateOf(false) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
     var showLabels by rememberSaveable { mutableStateOf(prefs.showLabels) }
 
-    BackHandler(onBack = onCancel)
+    BackHandler(onBack = leave)
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             EditorHeader(
-                onCancel = onCancel,
+                onCancel = leave,
                 onSave = { onSave(working) },
+                canUndo = editor.canUndo,
+                canRedo = editor.canRedo,
+                onUndo = editor::undo,
+                onRedo = editor::redo,
             )
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val wide = maxWidth >= 900.dp
@@ -117,11 +138,12 @@ fun LayoutEditorScreen(
                                 .weight(1f)
                                 .fillMaxHeight(),
                             onSelect = { selectedId = it },
-                            onMove = { id, x, y ->
-                                val place = working.placeOrDefault(id)
-                                working = working.withPlace(
-                                    place.copy(x = x.coerceIn(0f, 1f), y = y.coerceIn(0f, 1f)),
-                                )
+                            aspect = aspect,
+                            onGestureStart = editor::beginGesture,
+                            onGestureEnd = editor::endGesture,
+                            onTransform = { id, x, y, r ->
+                                val place = working.placeOrDefault(id).copy(x = x, y = y, r = r.coerceIn(0.02f, 0.25f))
+                                editor.change(working.withPlace(working.contain(place, aspect)))
                             },
                         )
                         Surface(
@@ -140,7 +162,9 @@ fun LayoutEditorScreen(
                                 onMenuPreview = { menuPreview = it },
                                 onShowHidden = { showHidden = it },
                                 onShowLabels = { showLabels = it },
-                                onLayout = { working = it },
+                                onLayout = { editor.endGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
+                                onSlide = { editor.beginGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
+                                onSlideEnd = editor::endGesture,
                             )
                         }
                     }
@@ -154,11 +178,12 @@ fun LayoutEditorScreen(
                             showLabels = showLabels,
                             modifier = Modifier.fillMaxWidth(),
                             onSelect = { selectedId = it },
-                            onMove = { id, x, y ->
-                                val place = working.placeOrDefault(id)
-                                working = working.withPlace(
-                                    place.copy(x = x.coerceIn(0f, 1f), y = y.coerceIn(0f, 1f)),
-                                )
+                            aspect = aspect,
+                            onGestureStart = editor::beginGesture,
+                            onGestureEnd = editor::endGesture,
+                            onTransform = { id, x, y, r ->
+                                val place = working.placeOrDefault(id).copy(x = x, y = y, r = r.coerceIn(0.02f, 0.25f))
+                                editor.change(working.withPlace(working.contain(place, aspect)))
                             },
                         )
                         Surface(
@@ -177,7 +202,9 @@ fun LayoutEditorScreen(
                                 onMenuPreview = { menuPreview = it },
                                 onShowHidden = { showHidden = it },
                                 onShowLabels = { showLabels = it },
-                                onLayout = { working = it },
+                                onLayout = { editor.endGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
+                                onSlide = { editor.beginGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
+                                onSlideEnd = editor::endGesture,
                             )
                         }
                     }
@@ -188,7 +215,7 @@ fun LayoutEditorScreen(
 }
 
 @Composable
-private fun EditorHeader(onCancel: () -> Unit, onSave: () -> Unit) {
+private fun EditorHeader(onCancel: () -> Unit, onSave: () -> Unit, canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
@@ -212,12 +239,15 @@ private fun EditorHeader(onCancel: () -> Unit, onSave: () -> Unit) {
                     letterSpacing = 2.sp,
                 )
                 Text(
-                    "Drag controls into place",
+                    "Move · pinch to resize",
                     style = MaterialTheme.typography.titleLarge,
                 )
             }
-            TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = 52.dp)) {
-                Text("Cancel")
+            IconButton(onClick = onUndo, enabled = canUndo) {
+                Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = "Undo layout change")
+            }
+            IconButton(onClick = onRedo, enabled = canRedo) {
+                Icon(Icons.AutoMirrored.Rounded.Redo, contentDescription = "Redo layout change")
             }
             Spacer(Modifier.width(8.dp))
             Button(onClick = onSave, modifier = Modifier.heightIn(min = 52.dp)) {
@@ -238,13 +268,15 @@ private fun PreviewArea(
     showLabels: Boolean,
     modifier: Modifier,
     onSelect: (String) -> Unit,
-    onMove: (String, Float, Float) -> Unit,
+    aspect: Float,
+    onGestureStart: () -> Unit,
+    onGestureEnd: () -> Unit,
+    onTransform: (String, Float, Float, Float) -> Unit,
 ) {
     BoxWithConstraints(
         modifier = modifier.padding(12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        val aspect = 16f / 9f
         val height = minOf(maxHeight, maxWidth / aspect)
         val width = height * aspect
         GameCanvas(
@@ -256,7 +288,10 @@ private fun PreviewArea(
             width = width,
             height = height,
             onSelect = onSelect,
-            onMove = onMove,
+            aspect = aspect,
+            onGestureStart = onGestureStart,
+            onGestureEnd = onGestureEnd,
+            onTransform = onTransform,
         )
     }
 }
@@ -271,7 +306,10 @@ private fun GameCanvas(
     width: Dp,
     height: Dp,
     onSelect: (String) -> Unit,
-    onMove: (String, Float, Float) -> Unit,
+    aspect: Float,
+    onGestureStart: () -> Unit,
+    onGestureEnd: () -> Unit,
+    onTransform: (String, Float, Float, Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val widthPx = with(density) { width.toPx() }
@@ -281,7 +319,9 @@ private fun GameCanvas(
     // position is measured once from the down point rather than from the layout captured when the gesture started
     val latestLayout by rememberUpdatedState(layout)
     val latestOnSelect by rememberUpdatedState(onSelect)
-    val latestOnMove by rememberUpdatedState(onMove)
+    val latestOnTransform by rememberUpdatedState(onTransform)
+    val latestOnStart by rememberUpdatedState(onGestureStart)
+    val latestOnEnd by rememberUpdatedState(onGestureEnd)
 
     Surface(
         modifier = Modifier
@@ -316,16 +356,17 @@ private fun GameCanvas(
             }
 
             shown.forEach { control ->
-                val place = layout.placeOrDefault(control.id)
+                val place = layout.contain(layout.placeOrDefault(control.id), aspect)
                 val shouldShow = when {
                     control.group == ControlGroup.Always -> true
                     control.group == ControlGroup.Play -> !menuPreview
                     else -> menuPreview
                 }
                 if (!shouldShow && !showHidden) return@forEach
+                if (place.hidden && !showHidden) return@forEach
                 val isHiddenHere = !shouldShow || place.hidden
                 val alpha = when {
-                    !isHiddenHere -> 1f
+                    !isHiddenHere -> layout.opacity / 100f
                     showHidden -> 0.58f
                     else -> 0.32f
                 }
@@ -362,22 +403,22 @@ private fun GameCanvas(
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 latestOnSelect(control.id)
-                                val start = latestLayout.placeOrDefault(control.id)
-                                do {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                    if (change.pressed) {
-                                        val total = change.position - down.position
-                                        if (total != Offset.Zero) {
-                                            change.consume()
-                                            latestOnMove(
-                                                control.id,
-                                                start.x + total.x / widthPx,
-                                                start.y + total.y / heightPx,
-                                            )
-                                        }
-                                    }
-                                } while (change.pressed)
+                                latestOnStart()
+                                try {
+                                    var pointer = down.id
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == pointer && it.pressed }
+                                            ?: event.changes.firstOrNull { it.pressed } ?: break
+                                        pointer = change.id
+                                        val current = latestLayout.placeOrDefault(control.id)
+                                        val delta = change.positionChange()
+                                        val zoom = event.calculateZoom()
+                                        latestOnTransform(control.id, current.x + delta.x / widthPx,
+                                            current.y + delta.y / heightPx, current.r * zoom)
+                                        event.changes.forEach { it.consume() }
+                                    } while (event.changes.any { it.pressed })
+                                } finally { latestOnEnd() }
                             }
                         },
                     contentAlignment = Alignment.Center,
@@ -584,6 +625,8 @@ private fun EditorPanel(
     onShowHidden: (Boolean) -> Unit,
     onShowLabels: (Boolean) -> Unit,
     onLayout: (TouchLayout) -> Unit,
+    onSlide: (TouchLayout) -> Unit,
+    onSlideEnd: () -> Unit,
 ) {
     val presets = buildList {
         addAll(Options.presets.filter { it.first != "custom" })
@@ -641,8 +684,7 @@ private fun EditorPanel(
                         )
                     }
                     Text(
-                        "Drag a control to move it. Its position is stored as a share of the screen, so it lands " +
-                            "in the same place on every phone and at every resolution.",
+                        "Drag to move. Pinch a control with two fingers to resize. Undo and redo work one gesture at a time.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -667,6 +709,8 @@ private fun EditorPanel(
                                 opacity = layout.opacity,
                                 scale = layout.scale,
                                 skin = layout.skin,
+                                fixedStick = layout.fixedStick,
+                                stickDeadzone = layout.stickDeadzone,
                             ),
                         )
                     },
@@ -679,7 +723,8 @@ private fun EditorPanel(
                     value = layout.scale.toFloat(),
                     range = 50f..150f,
                     steps = 99,
-                    onValueChange = { v -> onLayout(layout.copy(scale = v.toInt())) },
+                    onValueChange = { v -> onSlide(layout.copy(scale = v.toInt())) },
+                    onValueChangeFinished = onSlideEnd,
                 )
                 DividerInset()
                 SliderSetting(
@@ -689,7 +734,8 @@ private fun EditorPanel(
                     value = layout.opacity.toFloat(),
                     range = 20f..100f,
                     steps = 79,
-                    onValueChange = { v -> onLayout(layout.copy(opacity = v.toInt())) },
+                    onValueChange = { v -> onSlide(layout.copy(opacity = v.toInt())) },
+                    onValueChangeFinished = onSlideEnd,
                 )
                 DividerInset()
                 ChoiceSetting(
@@ -734,8 +780,9 @@ private fun EditorPanel(
                         range = 0.02f..0.25f,
                         steps = 22,
                         onValueChange = { r ->
-                            onLayout(layout.withPlace(place.copy(r = r)))
+                            onSlide(layout.withPlace(place.copy(r = r)))
                         },
+                        onValueChangeFinished = onSlideEnd,
                     )
                     DividerInset()
                     SliderSetting(
@@ -744,7 +791,8 @@ private fun EditorPanel(
                         value = place.x,
                         range = 0f..1f,
                         steps = 99,
-                        onValueChange = { x -> onLayout(layout.withPlace(place.copy(x = x))) },
+                        onValueChange = { x -> onSlide(layout.withPlace(place.copy(x = x))) },
+                        onValueChangeFinished = onSlideEnd,
                     )
                     DividerInset()
                     SliderSetting(
@@ -753,7 +801,8 @@ private fun EditorPanel(
                         value = place.y,
                         range = 0f..1f,
                         steps = 99,
-                        onValueChange = { y -> onLayout(layout.withPlace(place.copy(y = y))) },
+                        onValueChange = { y -> onSlide(layout.withPlace(place.copy(y = y))) },
+                        onValueChangeFinished = onSlideEnd,
                     )
                     DividerInset()
                     SwitchSetting(
@@ -860,6 +909,8 @@ private fun EditorPanel(
                             opacity = layout.opacity,
                             scale = layout.scale,
                             skin = layout.skin,
+                                fixedStick = layout.fixedStick,
+                                stickDeadzone = layout.stickDeadzone,
                         ),
                     )
                 },

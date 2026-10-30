@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Gesture
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -46,6 +49,8 @@ fun HomeScreen(
     onPlay: () -> Unit,
     onImport: (android.net.Uri) -> Unit,
     onRequestStorage: () -> Unit,
+    onOpenSection: (ControlSection) -> Unit,
+    onEditLayout: () -> Unit,
 ) {
     // the host accepts both single files and SAF folders; the folder picker is how a game folder gets in
     val isoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -57,6 +62,30 @@ fun HomeScreen(
     SettingsPage {
         item {
             HeroCard(version = version, preview = preview, game = game, onPlay = onPlay)
+        }
+        item {
+            SettingsGroup("Make it yours", "Set your grip, tune your aim, and make room for the action.") {
+                SettingRow(
+                    title = "Build your touch layout",
+                    subtitle = "Move, resize and hide buttons with a full-screen editor.",
+                    onClick = onEditLayout,
+                    trailing = { Icon(Icons.Rounded.Gesture, contentDescription = null) },
+                )
+                DividerInset()
+                SettingRow(
+                    title = "Tune your controls",
+                    subtitle = "Movement, sensitivity, motion aiming and controllers.",
+                    onClick = { onOpenSection(ControlSection.Controls) },
+                    trailing = { Icon(Icons.Rounded.Tune, contentDescription = null) },
+                )
+                DividerInset()
+                SettingRow(
+                    title = "Style your interface",
+                    subtitle = "Colours, contrast, scale and navigation.",
+                    onClick = { onOpenSection(ControlSection.Interface) },
+                    trailing = { Icon(Icons.Rounded.Palette, contentDescription = null) },
+                )
+            }
         }
         item {
             GameCard(
@@ -112,7 +141,7 @@ private fun HeroCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
-                        "Control Center · $version",
+                        "YOUR GAME. YOUR WAY. · $version",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFFBDB5A8),
                     )

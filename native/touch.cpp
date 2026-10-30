@@ -552,7 +552,7 @@ constexpr Button kButtons[] = {
     {"dpad_left", "Left", Icon::Left, kBit + 2, When::Menus},
     {"dpad_right", "Right", Icon::Right, kBit + 3, When::Menus},
     // the settings panel over the game, where its cheats give any weapon; a tap again closes it
-    {"panel", "Panel", Icon::Gear, kPanel, When::Always},
+    {"panel", "Settings", Icon::Gear, kPanel, When::Always},
     // confirm in the menus, as a pad's A, where a tap on the row is hard to aim
     {"enter", "Enter", Icon::Enter, kAnalogA, When::Menus},
     // the firing mode's button again, beside use while a scope is up: the scope's level, X2 or X5, and a tap switches
@@ -691,6 +691,9 @@ float Height() {
 
 std::filesystem::path LayoutFile() { return app::ExeDir() / "layout.toml"; }
 
+bool g_fixed_stick = false;
+int g_stick_deadzone = 8;
+
 void LoadLayout() {
     g_loaded = true;
     try {
@@ -701,6 +704,8 @@ void LoadLayout() {
         g_layout = *kPresets[g_preset].places;
         g_opacity = std::clamp(float(t["opacity"].value_or(double(g_opacity))), 0.2f, 1.0f);
         g_scale = std::clamp(float(t["scale"].value_or(double(g_scale))), 0.5f, 1.5f);
+        g_fixed_stick = t["fixed_stick"].value_or(false);
+        g_stick_deadzone = std::clamp(int(t["stick_deadzone"].value_or(int64_t(8))), 0, 30);
         std::string skin = t["skin"].value_or(std::string(kSkinIds[g_skin]));
         for (uint32_t i = 0; i < kSkins; i++)
             if (skin == kSkinIds[i]) g_skin = i;
@@ -726,7 +731,8 @@ void SaveLayout() {
                         toml::table{{"x", double(p.x)}, {"y", double(p.y)}, {"r", double(p.r)}, {"hidden", p.hidden}});
     }
     toml::table t{{"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"scale", double(g_scale)},
-                  {"skin", kSkinIds[g_skin]}, {"controls", controls}};
+                  {"skin", kSkinIds[g_skin]}, {"fixed_stick", g_fixed_stick},
+                  {"stick_deadzone", g_stick_deadzone}, {"controls", controls}};
     std::ofstream(LayoutFile()) << t << "\n";
 }
 
@@ -758,8 +764,10 @@ bool ButtonShown(size_t i) {
 }
 
 void Centre(size_t i, float& cx, float& cy) {
-    cx = g_layout[i].x * Width();
-    cy = g_layout[i].y * Height();
+    float hh = std::min(g_layout[i].r * g_scale * Height(), Height() * 0.49f);
+    float hw = std::min(hh * (i < kButtonCount && kButtons[i].rect ? 1.6f : 1.0f), Width() * 0.49f);
+    cx = std::clamp(g_layout[i].x * Width(), hw, Width() - hw);
+    cy = std::clamp(g_layout[i].y * Height(), hh, Height() - hh);
 }
 
 float Radius(size_t i) { return g_layout[i].r * g_scale * Height(); }
@@ -834,30 +842,31 @@ void CloseEditor(bool keep) {
 
 // the button under a point, kButtonCount for none
 size_t HitButton(float x, float y) {
+    size_t hit = kButtonCount;
+    float best = FLT_MAX;
     for (size_t i = 0; i < kButtonCount; i++) {
         if (!ButtonShown(i)) continue;
-        if (kButtons[i].rect) {
-            float x0, y0, x1, y1;
-            FireZoneBounds(i, x0, y0, x1, y1);
-            if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return i;
-            continue;
-        }
         float cx, cy;
         Centre(i, cx, cy);
-        float r = Radius(i) * 1.25f;  // a little slack around the drawn circle
-        if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) return i;
+        float r = std::max(Radius(i), 1.0f);
+        float dx = (x - cx) / r, dy = (y - cy) / r;
+        bool inside = kButtons[i].rect ? std::abs(dx) <= kFireZoneAspect && std::abs(dy) <= 1.0f
+                                        : dx * dx + dy * dy <= 1.25f * 1.25f;
+        // Overlapping touch targets choose the closest centre rather than array order.
+        float distance = dx * dx + dy * dy;
+        if (inside && distance < best) { best = distance; hit = i; }
     }
-    return kButtonCount;
+    return hit;
 }
 
 void UpdateStick(const Finger& f) {
     float r = Radius(kStick);
     float dx = (f.x - f.x0) / r, dy = (f.y - f.y0) / r;
     float len = std::sqrt(dx * dx + dy * dy);
-    if (len > 1) {
-        dx /= len;
-        dy /= len;
-    }
+    float deadzone = float(g_stick_deadzone) / 100.0f;
+    float travel = std::clamp((len - deadzone) / (1.0f - deadzone), 0.0f, 1.0f);
+    if (len > 0.0001f) { dx *= travel / len; dy *= travel / len; }
+    else dx = dy = 0;
     g_stick_x = dx;
     g_stick_y = -dy;
 }
@@ -947,6 +956,8 @@ void FingerDown(SDL_FingerID id, float x, float y) {
     }
     input::g_touch = true;
     size_t b = HitButton(x, y);
+    float stick_x, stick_y;
+    Centre(kStick, stick_x, stick_y);
     if (b < kButtonCount) {
         f.role = Role::Button;
         f.button = b;
@@ -959,10 +970,18 @@ void FingerDown(SDL_FingerID id, float x, float y) {
         f.menu = MenuTouch::Undecided;
         f.down_ms = NowMs();
         g_cursor_touch = true;
-    } else if (x < Width() * kStickZone) {
+    } else if ((g_fixed_stick
+                    ? std::hypot(x - stick_x, y - stick_y) <= Radius(kStick) * 1.5f
+                    : x < Width() * kStickZone) &&
+               std::none_of(g_fingers.begin(), g_fingers.end(), [](const Finger& finger) { return finger.role == Role::Stick; })) {
         f.role = Role::Stick;
+        if (g_fixed_stick) {
+            Centre(kStick, f.x0, f.y0);
+            UpdateStick(f);
+        }
     } else {
-        f.role = Role::Look;
+        // A spare left thumb must not steer the camera while another finger owns movement.
+        f.role = x < Width() * kStickZone ? Role::None : Role::Look;
     }
     g_fingers.push_back(f);
     Recount();
@@ -1424,7 +1443,8 @@ void SkinImage(ImDrawList* dl, SkinPart part, ImVec2 c, float r, ImU32 tint) {
 void DrawStick(ImDrawList* dl, float th) {
     // at rest in its place, else where the thumb came down
     float r = Radius(kStick);
-    ImVec2 at(g_layout[kStick].x * Width(), g_layout[kStick].y * Height());
+    ImVec2 at;
+    Centre(kStick, at.x, at.y);
     bool held = false;
     for (const Finger& f : g_fingers)
         if (f.role == Role::Stick) {

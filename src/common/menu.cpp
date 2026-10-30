@@ -970,10 +970,11 @@ bool MenuOpen() { return g_open.load(std::memory_order_relaxed); }
 bool Capturing() { return g_capture >= 0; }
 
 void ToggleMenu() {
-    bool open = !MenuOpen();
-    g_open.store(open, std::memory_order_relaxed);
+    // Android's Compose surface owns settings; the old ImGui panel is no longer an entry point.
+    g_open.store(false, std::memory_order_relaxed);
     g_capture = -1;
-    if (open) input::ReleaseCursor();
+    input::ReleaseCursor();
+    host::OpenControlCenter();
 }
 
 void DrawUi(double fps) {

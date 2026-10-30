@@ -178,6 +178,8 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
             .topLevel("opacity", (layout.opacity.coerceIn(20, 100).toDouble() / 100.0))
             .topLevel("scale", (layout.scale.coerceIn(50, 150).toDouble() / 100.0))
             .topLevel("skin", layout.skin)
+            .topLevel("fixed_stick", layout.fixedStick)
+            .topLevel("stick_deadzone", layout.stickDeadzone.coerceIn(0, 30))
         for (control in TouchControl.all) {
             val p = layout.placeOrDefault(control.id)
             b.table("controls.${control.id}")
@@ -212,7 +214,10 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
                 (((table["hidden"] as? TomlValue.Bool)?.value) ?: control.defaultHidden) && !control.keep,
             )
         }
-        return TouchLayout(base, opacity, scale, skin, places)
+        return TouchLayout(base, opacity, scale, skin, places,
+            doc.bool("", "fixed_stick") ?: false,
+            (doc.long("", "stick_deadzone")?.toInt() ?: 8).coerceIn(0, 30),
+        )
     }
 
     private fun read(file: File): TomlDocument {

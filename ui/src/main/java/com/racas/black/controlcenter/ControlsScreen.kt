@@ -69,6 +69,26 @@ fun ControlsScreen(
             )
         }
         item {
+            SettingsGroup("Movement", "Tune how the left thumb moves your character.") {
+                SwitchSetting(
+                    title = "Fixed movement stick",
+                    subtitle = "Anchor the stick at its layout position. Off: it follows your first touch on the left.",
+                    checked = layout.fixedStick,
+                    onCheckedChange = { fixed -> onSettings { it.copy(touchLayout = layout.copy(fixedStick = fixed)) } },
+                )
+                DividerInset()
+                SliderSetting(
+                    title = "Movement deadzone",
+                    subtitle = "Ignore small thumb movements, then smoothly reach full speed.",
+                    valueText = "${layout.stickDeadzone}%",
+                    value = layout.stickDeadzone.toFloat(),
+                    range = 0f..30f,
+                    steps = 29,
+                    onValueChange = { v -> onSettings { it.copy(touchLayout = layout.copy(stickDeadzone = v.toInt())) } },
+                )
+            }
+        }
+        item {
             SettingsGroup("Touch layout", "The controls are drawn over the game; the preview stays in the editor.") {
                 ChoiceSetting(
                     title = "Preset",
@@ -82,6 +102,8 @@ fun ControlsScreen(
                                 opacity = layout.opacity,
                                 scale = layout.scale,
                                 skin = layout.skin,
+                                fixedStick = layout.fixedStick,
+                                stickDeadzone = layout.stickDeadzone,
                             )
                             onSettings { it.copy(touchLayout = next) }
                         }

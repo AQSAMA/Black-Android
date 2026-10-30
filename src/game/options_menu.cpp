@@ -36,6 +36,8 @@ using flash::Set;
 using flash::String;
 using flash::Text;
 
+namespace host { void OpenControlCenter(); }
+
 namespace {
 
 // as menu.cpp's pages, but for the cheats: those are in the panel the touch controls' gear button opens. The
@@ -97,7 +99,7 @@ struct Host {
 };
 constexpr Host kHosts[] = {
     {"OptionsMenuXbox", "TextAnim", "_level4.Main.TextAnim.ControllerSetup_Text", "Playerprofile_Text", 25.0f,
-     "controllerButton", "Playerprofile", kEntries, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
+     "controllerButton", "Playerprofile", 1, 25.0f, -37.0f, 185.0f, 0.9f, nullptr,
      {"ControllerSetup_Text", "SoundSetup_Text", "PictureSetup_Text", "Playerprofile_Text"},
      {1.0f, 245.0f, 445.0f, -5.0f}},
     {"PauseMenuOptionXbox", nullptr, "_level4.Main.ToggleCrouch", "ToggleCrouch", 222.0f,
@@ -244,7 +246,7 @@ bool Entries(X86Context& ctx, uint32_t root, uint32_t holder) {
         char name[16];
         std::snprintf(name, sizeof(name), "RC_E%d", i);
         if (!(p.entry[i] = Copy(ctx, holder, name, kDepth + i))) return false;
-        if (!Show(ctx, kEntry + i, p.entry[i], nullptr, app::Ui(kCaptions[i]).c_str())) return false;
+        if (!Show(ctx, kEntry + i, p.entry[i], nullptr, app::Ui("CONTROL CENTER").c_str())) return false;
     }
     p.first = p.entry[0];
     Follow(p);
@@ -662,6 +664,8 @@ void Tick(X86Context& ctx, uint32_t ui) {
     Page& p = g_page;
     const char* name = static_cast<const char*>(HostPtr(ui + kPageName));
     const Host* host = FindHost(name);
+    // Controller calibration now lives in the same modern settings surface as touch and gyro.
+    if (host && !host->entries) return;
     bool running = host && R32(flash::kPlayerReady) == 1 && R32(flash::kPlayer) && R32(ui + kPageReady) == kPageRunning;
     if (!running) {
         if (*name && !host) g_next = g_last = 0;
@@ -690,7 +694,11 @@ void Tick(X86Context& ctx, uint32_t ui) {
     uint32_t focus = Member(ctx, menu, "mFocusButton");
     if (!p.mode) {
         const uint32_t* at = std::find(std::begin(p.entry), std::end(p.entry), focus);
-        if (id == kInputConfirm && at != std::end(p.entry)) g_next = int(at - p.entry) + 1;
+        if (id == kInputConfirm && focus && at != std::end(p.entry)) {
+            // Consume before Flash can reload the old options page.
+            W32(ui + kMenuInput, 0);
+            host::OpenControlCenter();
+        }
         return;
     }
     size_t slot = size_t(std::find(p.name, p.name + p.slots, focus) - p.name);

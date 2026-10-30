@@ -73,6 +73,8 @@ data class TouchLayout(
     val scale: Int = 100,
     val skin: String = "modern",
     val controls: Map<String, ControlPlace> = emptyMap(),
+    val fixedStick: Boolean = false,
+    val stickDeadzone: Int = 8,
 ) {
     fun place(id: String): ControlPlace? = controls[id] ?: TouchControl.byId[id]?.let { c ->
         val d = c.defaults(preset)
@@ -177,7 +179,7 @@ data class TouchControl(
             TouchControl("dpad_down", "Down", ControlGroup.Menus, false, floatArrayOf(0.110f, 0.800f, 0.048f, 0.110f, 0.800f, 0.048f, 0.110f, 0.800f, 0.048f)),
             TouchControl("dpad_left", "Left", ControlGroup.Menus, false, floatArrayOf(0.064f, 0.700f, 0.048f, 0.064f, 0.700f, 0.048f, 0.064f, 0.700f, 0.048f)),
             TouchControl("dpad_right", "Right", ControlGroup.Menus, false, floatArrayOf(0.156f, 0.700f, 0.048f, 0.156f, 0.700f, 0.048f, 0.156f, 0.700f, 0.048f)),
-            TouchControl("panel", "Panel", ControlGroup.Always, false, floatArrayOf(0.581f, 0.070f, 0.040f, 0.581f, 0.070f, 0.040f, 0.581f, 0.070f, 0.040f)),
+            TouchControl("panel", "Settings", ControlGroup.Always, false, floatArrayOf(0.581f, 0.070f, 0.040f, 0.581f, 0.070f, 0.040f, 0.581f, 0.070f, 0.040f)),
             TouchControl("enter", "Enter", ControlGroup.Menus, false, floatArrayOf(0.920f, 0.780f, 0.070f, 0.920f, 0.780f, 0.070f, 0.920f, 0.780f, 0.070f)),
             TouchControl("zoom", "Scope zoom", ControlGroup.Play, false, floatArrayOf(0.715f, 0.400f, 0.050f, 0.690f, 0.400f, 0.045f, 0.655f, 0.380f, 0.045f)),
             // a wide, transparent fire button for the left index finger; off until it is switched on, then dragged
@@ -255,7 +257,7 @@ object Bindings {
         Action("back", "Objectives", "Tab"),
         Action("pause", "Pause menu", "Escape"),
         Action("hide_hud", "Toggle HUD", ""),
-        Action("settings_panel", "Settings panel", "F10"),
+        Action("settings_panel", "Control Center", "F10"),
         Action("look_up", "Look up", "Up"),
         Action("look_down", "Look down", "Down"),
         Action("look_left", "Look left", "Left"),

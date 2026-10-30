@@ -31,10 +31,10 @@ The **Control Center** is the app's front end: it opens when you launch Black An
 - **Overview**: whether the game files were found, **Play**, choosing the game folder or importing a disc image, storage access, and sharing or exporting the settings as TOML.
 - **Display**, **Controls** and **Audio**: the port's settings gathered under large, plain-language pages, each with its own reset button. **More** holds **Interface**, **Cheats**, **About** and the update check, keeping the bottom bar to five destinations (a side rail on wide screens).
 - **Interface**: OLED black, dark or system theme; eight accent colours; square or round corners; high contrast; interface and text scale; a bottom bar or a side rail on wide screens; haptics, reduced motion and keep-screen-on.
-- **Layout editor**: a full-screen preview of the touch controls. Drag any control, resize it with a slider or a pinch, hide the ones you do not use, and save the layout back to the game. The optional top-left fire zone is a wide rectangle that can be dragged and resized like the round buttons.
+- **Layout editor**: a screen-matched preview with gesture-level undo/redo, pinch resizing, protected edges, rotation-safe drafts, and discard confirmation. Drag any control, resize it with a slider or a pinch, hide the ones you do not use, and save the layout back to the game. The optional top-left fire zone is a wide rectangle that can be dragged and resized like the round buttons.
 - **Back and Play** behave as expected: back leaves the Control Center, and the **Play** button in the top bar returns to the game.
 
-The game's own options remain available in the pause menu, grouped into **Graphics**, **Touch Controls**, **General**, **Mouse and Keyboard** and **Cheats**. Each page has headings and arrows above and below the list to show there is more to scroll to; tap an arrow to move one row, or hold it to keep going.
+The on-screen settings button, F10, and **CONTROL CENTER** in the game options open the modern Android settings interface directly. The old ImGui settings panel and injected port settings pages are no longer exposed. The original game menus remain available for missions, saves, and game-specific options.
 
 ### Graphics
 - **Display**
@@ -52,7 +52,7 @@ The game's own options remain available in the pause menu, grouped into **Graphi
   - **Reload Blur**: turns the blur while reloading on or off.
 
 ### Touch Controls
-- **Touch**: the left side of the screen is a floating movement stick, and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing. The controls hide over loading screens and cutscenes.
+- **Touch**: choose a floating or fixed movement stick with a 0–30% movement deadzone; and dragging on the right turns the view. On-screen buttons cover fire, aim, reload, use, melee, grenades, crouch, weapon switching and the suppressor. Dragging from a fire button turns the view while firing. The controls hide over loading screens and cutscenes.
 - **Modern controls**: the default button style is dark glass with a thin rim and warm ink, a soft shadow, and an accent fill while a button is held. The movement stick is a floating ring with a small knob and compass ticks. *Xbox* (the skin's icons with the Xbox controller's marks), *Clean* and *Classic* remain available.
 - **Fire zone**: an optional wide fire rectangle in the top-left corner for the left index finger. It is off by default, switched on under **Controls → Top-left fire zone**, and then dragged or resized in the editor like any other control.
 - **Menus**: a D-pad and a back button move through the menus and the options; tap an arrow to step one row, or hold it to keep going.

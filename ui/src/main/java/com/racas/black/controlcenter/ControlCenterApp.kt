@@ -109,13 +109,19 @@ fun BlackControlCenter(host: ControlCenterHost) {
         val latestSettings = rememberUpdatedState(settings)
         val lifecycleOwner = LocalLifecycleOwner.current
 
-        fun flushSettings() {
-            runCatching { host.settingsStore.save(latestSettings.value) }
-        }
+        fun flushSettings(): Boolean = runCatching {
+            host.settingsStore.save(latestSettings.value)
+        }.onFailure {
+            scope.launch { snackbar.showSnackbar("Could not save settings. Check available storage and try again.") }
+        }.isSuccess
 
         DisposableEffect(lifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_STOP) flushSettings()
+                when (event) {
+                    Lifecycle.Event.ON_START -> settings = host.settingsStore.load()
+                    Lifecycle.Event.ON_STOP -> flushSettings()
+                    else -> Unit
+                }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose {
@@ -128,7 +134,11 @@ fun BlackControlCenter(host: ControlCenterHost) {
             snapshotFlow { settings }
                 .drop(1)
                 .debounce(280)
-                .collect { host.settingsStore.save(it) }
+                .collect { next ->
+                    runCatching { host.settingsStore.save(next) }.onFailure {
+                        snackbar.showSnackbar("Could not save settings. Check available storage and try again.")
+                    }
+                }
         }
 
         LaunchedEffect(prefs.keepScreenOn) {
@@ -163,7 +173,8 @@ fun BlackControlCenter(host: ControlCenterHost) {
         }
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val wide = maxWidth >= 840.dp
+            val showRailBrand = maxHeight >= 480.dp
+            val wide = maxWidth >= 640.dp && maxWidth > maxHeight
             val useRail = when (prefs.navigation) {
                 NavigationStyle.Rail -> true
                 NavigationStyle.Bottom -> false
@@ -194,11 +205,10 @@ fun BlackControlCenter(host: ControlCenterHost) {
                             },
                             navigationIcon = if (section.primary) noIcon else backToMore,
                             actions = {
-                                if (game !is GameStatus.Importing) {
+                                if (game is GameStatus.Ready || host.isPreview) {
                                     FilledTonalIconButton(
                                         onClick = {
-                                            flushSettings()
-                                            host.launchGame()
+                                            if (flushSettings()) host.launchGame()
                                         },
                                     ) {
                                         Icon(
@@ -239,11 +249,12 @@ fun BlackControlCenter(host: ControlCenterHost) {
                                     version = host.appVersion,
                                     preview = host.isPreview,
                                     onPlay = {
-                                        flushSettings()
-                                        host.launchGame()
+                                        if (flushSettings()) host.launchGame()
                                     },
                                     onImport = { uri -> host.importGame(uri) },
                                     onRequestStorage = { host.requestStorageAccess() },
+                                    onOpenSection = { sectionId = it.id },
+                                    onEditLayout = { editingLayout = true },
                                 )
                                 ControlSection.Display -> DisplayScreen(
                                     settings = settings,
@@ -295,7 +306,7 @@ fun BlackControlCenter(host: ControlCenterHost) {
                             .fillMaxHeight()
                             .windowInsetsPadding(WindowInsets.statusBars),
                         header = {
-                            Surface(
+                            if (showRailBrand) Surface(
                                 modifier = Modifier
                                     .padding(top = 12.dp)
                                     .size(52.dp),
