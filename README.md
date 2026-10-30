@@ -109,6 +109,12 @@ Install the APK with:
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
+Before distributing a personal APK, verify its identity, signature, native source revision, ABI and absence of disc assets:
+```
+python tools/verify_apk.py path/to/Black.apk --version 1.7.0-personal --commit <full-source-commit>
+```
+The verifier uses Android SDK build-tools 34.0.0 and Java, and prints a JSON record including the APK SHA-256. Its default package and certificate are this personal build's; use `--package` and `--certificate` for a different build identity.
+
 ### 5. Build the Control Center preview (any OS)
 The Control Center can be built as a standalone preview APK, `com.racas.black.preview`, without Windows, the NDK, the recompiled game or any game data:
 ```
