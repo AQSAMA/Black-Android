@@ -165,7 +165,7 @@ internal object TomlWriter {
         private val out = StringBuilder()
         private var current = ""
 
-        fun topLevel(key: String, value: String): Builder = line(key, value)
+        fun topLevel(key: String, value: String): Builder = line(key, scalar(value))
         fun topLevel(key: String, value: Boolean): Builder = line(key, scalar(value))
         fun topLevel(key: String, value: Int): Builder = line(key, scalar(value))
         fun topLevel(key: String, value: Long): Builder = line(key, scalar(value))

@@ -3,6 +3,7 @@ package com.racas.black.controlcenter
 import android.util.Log
 import java.io.File
 import java.util.Locale
+import kotlin.math.roundToInt
 
 interface SettingsStore {
     fun load(): GameSettings
@@ -193,8 +194,8 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
 
     private fun readLayout(doc: TomlDocument): TouchLayout {
         val base = doc.string("", "preset")?.takeIf { it in setOf("default", "three", "four") } ?: "default"
-        val opacity = ((doc.double("", "opacity") ?: 0.85) * 100.0).toInt().coerceIn(20, 100)
-        val scale = ((doc.double("", "scale") ?: 1.0) * 100.0).toInt().coerceIn(50, 150)
+        val opacity = ((doc.double("", "opacity") ?: 0.85) * 100.0).roundToInt().coerceIn(20, 100)
+        val scale = ((doc.double("", "scale") ?: 1.0) * 100.0).roundToInt().coerceIn(50, 150)
         val skin = doc.string("", "skin")?.takeIf { it in setOf("modern", "xbox", "clean", "classic") } ?: "modern"
         val places = linkedMapOf<String, ControlPlace>()
         for (control in TouchControl.all) {
