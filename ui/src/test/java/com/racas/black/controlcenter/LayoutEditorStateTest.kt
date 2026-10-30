@@ -1,5 +1,6 @@
 package com.racas.black.controlcenter
 
+import androidx.compose.runtime.saveable.SaverScope
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -31,6 +32,27 @@ class LayoutEditorStateTest {
         var count = 0
         while (state.canUndo) { state.undo(); count++ }
         assertEquals(50, count)
+    }
+
+    @Test fun activityRecreationRestoresTheEntireUnsavedDraft() {
+        val state = LayoutEditorState(TouchLayout.fromPreset("four").copy(
+            opacity = 61, scale = 130, skin = "clean", fixedStick = true, stickDeadzone = 23,
+        ))
+        state.beginGesture()
+        state.change(state.layout.withPlace(ControlPlace("fire_zone", 0.35f, 0.28f, 0.16f, false)))
+        state.endGesture()
+        val scope = object : SaverScope {
+            override fun canBeSaved(value: Any): Boolean = value is String || value is Number || value is Boolean || value is List<*>
+        }
+        val saved = with(LayoutEditorState.Saver) { scope.save(state) }
+        assertNotNull(saved)
+        val restored = LayoutEditorState.Saver.restore(saved!!)!!
+        assertEquals(state.layout, restored.layout)
+        assertFalse(restored.canUndo)
+        // The restored draft remains editable and starts its own history without changing the saved snapshot.
+        restored.change(restored.layout.copy(opacity = 72))
+        restored.undo()
+        assertEquals(state.layout, restored.layout)
     }
 
     @Test fun edgesContainWholeCircularAndRectangularTargetsAtEveryScale() {
