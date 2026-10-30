@@ -665,7 +665,7 @@ void Tick(X86Context& ctx, uint32_t ui) {
     const char* name = static_cast<const char*>(HostPtr(ui + kPageName));
     const Host* host = FindHost(name);
     // Controller calibration now lives in the same modern settings surface as touch and gyro.
-    if (host && !host->entries) return;
+    if (host && !host->entries) { p = {}; g_next = g_last = 0; return; }
     bool running = host && R32(flash::kPlayerReady) == 1 && R32(flash::kPlayer) && R32(ui + kPageReady) == kPageRunning;
     if (!running) {
         if (*name && !host) g_next = g_last = 0;

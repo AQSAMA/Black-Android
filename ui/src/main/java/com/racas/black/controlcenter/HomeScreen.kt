@@ -61,7 +61,9 @@ fun HomeScreen(
     }
     SettingsPage {
         item {
-            HeroCard(version = version, preview = preview, game = game, onPlay = onPlay)
+            HeroCard(version = version, preview = preview, game = game, onPlay = {
+                if (game is GameStatus.Ready || preview) onPlay() else folderPicker.launch(null)
+            })
         }
         item {
             SettingsGroup("Make it yours", "Set your grip, tune your aim, and make room for the action.") {
@@ -159,6 +161,7 @@ private fun HeroCard(
                 Spacer(Modifier.size(18.dp))
                 Button(
                     onClick = onPlay,
+                    enabled = game !is GameStatus.Importing && game !is GameStatus.Checking,
                     modifier = Modifier.heightIn(min = 56.dp),
                     contentPadding = PaddingValues(horizontal = 24.dp),
                 ) {

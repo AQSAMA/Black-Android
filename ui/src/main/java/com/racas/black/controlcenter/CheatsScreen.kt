@@ -33,8 +33,7 @@ fun CheatsScreen(
             item {
                 InfoBanner(
                     title = "Cheats are active",
-                    text = "The game will show these on the next frame. If you are playing, open the game's pause " +
-                        "menu or the gear panel to see the effect.",
+                    text = "Your changes apply when you return to the game.",
                     tonal = true,
                 )
             }

@@ -35,6 +35,7 @@
 #include "common/translations.h"
 #include "core/log.h"
 #include "host.h"
+#include "touch_input.h"
 
 namespace input {
 
@@ -850,11 +851,8 @@ size_t HitButton(float x, float y) {
         Centre(i, cx, cy);
         float r = std::max(Radius(i), 1.0f);
         float dx = (x - cx) / r, dy = (y - cy) / r;
-        bool inside = kButtons[i].rect ? std::abs(dx) <= kFireZoneAspect && std::abs(dy) <= 1.0f
-                                        : dx * dx + dy * dy <= 1.25f * 1.25f;
-        // Overlapping touch targets choose the closest centre rather than array order.
-        float distance = dx * dx + dy * dy;
-        if (inside && distance < best) { best = distance; hit = i; }
+        float distance = detail::TargetDistance(dx, dy, kButtons[i].rect);
+        if (distance < best) { best = distance; hit = i; }
     }
     return hit;
 }
@@ -862,13 +860,9 @@ size_t HitButton(float x, float y) {
 void UpdateStick(const Finger& f) {
     float r = Radius(kStick);
     float dx = (f.x - f.x0) / r, dy = (f.y - f.y0) / r;
-    float len = std::sqrt(dx * dx + dy * dy);
-    float deadzone = float(g_stick_deadzone) / 100.0f;
-    float travel = std::clamp((len - deadzone) / (1.0f - deadzone), 0.0f, 1.0f);
-    if (len > 0.0001f) { dx *= travel / len; dy *= travel / len; }
-    else dx = dy = 0;
-    g_stick_x = dx;
-    g_stick_y = -dy;
+    const auto value = detail::RemapStick(dx, dy, float(g_stick_deadzone) / 100.0f);
+    g_stick_x = value.x;
+    g_stick_y = -value.y;
 }
 
 // a dpad arrow held in the menus: a step as it comes down, then steps at a calm pace once held a while; the game
@@ -970,18 +964,23 @@ void FingerDown(SDL_FingerID id, float x, float y) {
         f.menu = MenuTouch::Undecided;
         f.down_ms = NowMs();
         g_cursor_touch = true;
-    } else if ((g_fixed_stick
-                    ? std::hypot(x - stick_x, y - stick_y) <= Radius(kStick) * 1.5f
-                    : x < Width() * kStickZone) &&
-               std::none_of(g_fingers.begin(), g_fingers.end(), [](const Finger& finger) { return finger.role == Role::Stick; })) {
-        f.role = Role::Stick;
-        if (g_fixed_stick) {
-            Centre(kStick, f.x0, f.y0);
-            UpdateStick(f);
-        }
     } else {
-        // A spare left thumb must not steer the camera while another finger owns movement.
-        f.role = x < Width() * kStickZone ? Role::None : Role::Look;
+        bool owned = std::any_of(g_fingers.begin(), g_fingers.end(), [](const Finger& finger) {
+            return finger.role == Role::Stick;
+        });
+        bool inside = std::hypot(x - stick_x, y - stick_y) <= Radius(kStick) * 1.5f;
+        switch (detail::RouteFreeTouch(g_fixed_stick, inside, x < Width() * kStickZone, owned)) {
+            case detail::FreeTouchRole::Stick:
+                f.role = Role::Stick;
+                if (g_fixed_stick) {
+                    f.x0 = stick_x;
+                    f.y0 = stick_y;
+                    UpdateStick(f);
+                }
+                break;
+            case detail::FreeTouchRole::Look: f.role = Role::Look; break;
+            case detail::FreeTouchRole::None: f.role = Role::None; break;
+        }
     }
     g_fingers.push_back(f);
     Recount();

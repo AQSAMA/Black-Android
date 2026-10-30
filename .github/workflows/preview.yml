@@ -36,6 +36,8 @@ on:
     paths:
       - "ui/**"
       - "uipreview/**"
+      - "native/touch_input.h"
+      - "tests/native/**"
       - "build.gradle"
       - "settings.gradle"
       - "gradle.properties"
@@ -168,8 +170,14 @@ jobs:
             echo "BLACK_REQUIRE_SIGNING=true"
           } >> "$GITHUB_ENV"
 
-      - name: Build
-        run: bash ./gradlew -PpreviewOnly :uipreview:assembleRelease $GRADLE_ARGS
+      - name: Native touch regression tests
+        if: hashFiles('tests/native/touch_input_test.cpp') != ''
+        run: |
+          c++ -std=c++20 -Wall -Wextra -Werror tests/native/touch_input_test.cpp -o "$RUNNER_TEMP/touch-input-test"
+          "$RUNNER_TEMP/touch-input-test"
+
+      - name: Build and test
+        run: bash ./gradlew -PpreviewOnly :ui:testReleaseUnitTest :uipreview:assembleRelease $GRADLE_ARGS
 
       - name: Name the APK
         shell: bash
