@@ -14,6 +14,14 @@ The game's x86 code is statically recompiled ahead of time to C++ with [XboxXBE-
   <sub>▶ Gameplay on POCO F6, max settings + gyro aim</sub>
 </p>
 
+## Personal 1.8 controls overhaul
+- Landscape settings with a compact sidebar and direct camera-speed control (25–1200%). Advanced tools stay under More.
+- Exactly one visible fire button per preset. Upgrading old layouts hides duplicate fire targets once; extra fire buttons can be enabled explicitly.
+- Fixed-stick movement and its deadzone never turn the camera. Slow swipes retain fractional movement instead of losing small events.
+- Landscape HUD Studio fills the screen with a collapsible floating inspector, undo/redo, pinch sizing and a permanently reachable Save action.
+- **Edit on game screen** returns directly to the actual game HUD editor. During play, hold the settings gear for about half a second and release to edit, then Save or Exit.
+- Ordinary original-game options entries open the new settings surface instead of the old Flash options lists.
+
 ## Installation
 1. Install the APK.
 2. Open **Black Android**. The **Control Center** opens first. The first time it opens, it explains why it needs **all files access** and offers the system page for it (on Android 10 it asks for the **storage** permission instead). Tap **Allow access** there and grant it.

@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -121,9 +123,10 @@ fun LayoutEditorScreen(layout: TouchLayout, prefs: InterfacePreferences, onCance
                     val now = editor.layout
                     editor.change(now.withPlace(now.contain(now.placeOrDefault(id).copy(x=x,y=y,r=r), aspect)))
                 })
-            Surface(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(8.dp),
+            Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(8.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shape = RoundedCornerShape(8.dp)) {
                 Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = leave) { Icon(Icons.Rounded.Close, "Exit editor") }
                     Text("HUD STUDIO", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal=8.dp))
                     IconButton(onClick = editor::undo, enabled = editor.canUndo) { Icon(Icons.AutoMirrored.Rounded.Undo,"Undo") }
@@ -142,6 +145,7 @@ fun LayoutEditorScreen(layout: TouchLayout, prefs: InterfacePreferences, onCance
                         }
                     }
                     TextButton(onClick = { tools = !tools }) { Text(if(tools) "Hide tools" else "Show tools") }
+                    }
                     Button(onClick = { onSave(editor.layout) }, modifier = Modifier.padding(start=8.dp)) { Text("Save") }
                 }
             }

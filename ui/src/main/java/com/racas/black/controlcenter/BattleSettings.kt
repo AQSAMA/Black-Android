@@ -138,11 +138,18 @@ fun BattleSettings(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun BattleGraphics(s: GameSettings, update: ((GameSettings) -> GameSettings) -> Unit) {
     BattleBody {
         Tuning("Render resolution", s.renderPercent.toFloat(), 20f..200f, "${s.renderPercent}%") { v -> update { it.copy(renderPercent = v.toInt()) } }
         Tuning("Field of view", s.fov.toFloat(), 45f..140f, "${s.fov}°") { v -> update { it.copy(fov = v.toInt()) } }
-        Tuning("Frame limit", s.fpsCap.toFloat(), 0f..144f, if(s.fpsCap == 0) "Unlimited" else "${s.fpsCap} FPS") { v -> update { it.copy(fpsCap = v.toInt()) } }
+        Text("Frame limit", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(30,60,90,120,0).forEach { fps ->
+                FilterChip(selected = s.fpsCap == fps, onClick = { update { it.copy(fpsCap = fps) } },
+                    label = { Text(if(fps == 0) "Unlimited" else "$fps FPS") }, modifier = Modifier.heightIn(min = 48.dp))
+            }
+        }
         Toggle("Show FPS", s.fpsCounter) { v -> update { it.copy(fpsCounter = v) } }
         Toggle("V-sync", s.vsync) { v -> update { it.copy(vsync = v) } }
         Toggle("Reload blur", s.reloadBlur) { v -> update { it.copy(reloadBlur = v) } }
