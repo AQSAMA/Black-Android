@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -33,6 +34,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.gestures.calculateZoom
@@ -88,207 +96,94 @@ import kotlin.math.roundToInt
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun LayoutEditorScreen(
-    layout: TouchLayout,
-    prefs: InterfacePreferences,
-    onCancel: () -> Unit,
-    onSave: (TouchLayout) -> Unit,
-) {
+fun LayoutEditorScreen(layout: TouchLayout, prefs: InterfacePreferences, onCancel: () -> Unit, onSave: (TouchLayout) -> Unit) {
     val editor = rememberSaveable(saver = LayoutEditorState.Saver) { LayoutEditorState(layout) }
-    val working = editor.layout
-    val config = LocalConfiguration.current
-    val aspect = maxOf(config.screenWidthDp, config.screenHeightDp).toFloat() / minOf(config.screenWidthDp, config.screenHeightDp).coerceAtLeast(1)
+    var selectedId by rememberSaveable { mutableStateOf("fire") }
+    var tools by rememberSaveable { mutableStateOf(true) }
+    var hidden by rememberSaveable { mutableStateOf(false) }
+    var menus by rememberSaveable { mutableStateOf(false) }
     var discard by remember { mutableStateOf(false) }
-    val leave = { if (working != layout) discard = true else onCancel() }
-    if (discard) AlertDialog(
-        onDismissRequest = { discard = false },
-        title = { Text("Discard layout changes?") },
-        text = { Text("Your saved controls will stay as they were.") },
-        confirmButton = { TextButton(onClick = onCancel) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } },
-    )
-    var selectedId by rememberSaveable { mutableStateOf<String?>("fire") }
-    var menuPreview by rememberSaveable { mutableStateOf(false) }
-    var showHidden by rememberSaveable { mutableStateOf(false) }
-    var showLabels by rememberSaveable { mutableStateOf(prefs.showLabels) }
-
+    var choosing by remember { mutableStateOf(false) }
+    var presets by remember { mutableStateOf(false) }
+    val leave = { if (editor.layout != layout) discard = true else onCancel() }
     BackHandler(onBack = leave)
-
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
-            EditorHeader(
-                onCancel = leave,
-                onSave = { onSave(working) },
-                canUndo = editor.canUndo,
-                canRedo = editor.canRedo,
-                onUndo = editor::undo,
-                onRedo = editor::redo,
-            )
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val panelWidth = if (maxWidth >= 900.dp) 360.dp else 300.dp
-                val wide = maxWidth >= 600.dp && maxWidth > maxHeight
-                if (wide) {
-                    Row(Modifier.fillMaxSize()) {
-                        PreviewArea(
-                            layout = working,
-                            selectedId = selectedId,
-                            menuPreview = menuPreview,
-                            showHidden = showHidden,
-                            showLabels = showLabels,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            onSelect = { selectedId = it },
-                            aspect = aspect,
-                            onGestureStart = editor::beginGesture,
-                            onGestureEnd = editor::endGesture,
-                            onTransform = { id, x, y, r ->
-                                val place = working.placeOrDefault(id).copy(x = x, y = y, r = r.coerceIn(0.02f, 0.25f))
-                                editor.change(working.withPlace(working.contain(place, aspect)))
-                            },
-                        )
-                        Surface(
-                            Modifier
-                                .width(panelWidth)
-                                .fillMaxHeight(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        ) {
-                            EditorPanel(
-                                layout = working,
-                                selectedId = selectedId,
-                                menuPreview = menuPreview,
-                                showHidden = showHidden,
-                                showLabels = showLabels,
-                                onSelect = { selectedId = it },
-                                onMenuPreview = { menuPreview = it },
-                                onShowHidden = { showHidden = it },
-                                onShowLabels = { showLabels = it },
-                                onLayout = { editor.endGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
-                                onSlide = { editor.beginGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
-                                onSlideEnd = editor::endGesture,
-                            )
+    if(discard) AlertDialog(onDismissRequest = { discard = false }, title = { Text("Discard changes?") },
+        confirmButton = { TextButton(onClick = onCancel) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { discard = false }) { Text("Keep editing") } })
+    Surface(Modifier.fillMaxSize(), color = Color(0xFF0D141E)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val aspect = maxWidth.value / maxHeight.value.coerceAtLeast(1f)
+            val current = editor.layout
+            GameCanvas(current, selectedId, menus, hidden, prefs.showLabels, maxWidth, maxHeight,
+                onSelect = { selectedId = it }, aspect = aspect,
+                onGestureStart = editor::beginGesture, onGestureEnd = editor::endGesture,
+                onTransform = { id,x,y,r ->
+                    val now = editor.layout
+                    editor.change(now.withPlace(now.contain(now.placeOrDefault(id).copy(x=x,y=y,r=r), aspect)))
+                })
+            Surface(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(8.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), shape = RoundedCornerShape(8.dp)) {
+                Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = leave) { Icon(Icons.Rounded.Close, "Exit editor") }
+                    Text("HUD STUDIO", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal=8.dp))
+                    IconButton(onClick = editor::undo, enabled = editor.canUndo) { Icon(Icons.AutoMirrored.Rounded.Undo,"Undo") }
+                    IconButton(onClick = editor::redo, enabled = editor.canRedo) { Icon(Icons.AutoMirrored.Rounded.Redo,"Redo") }
+                    Box {
+                        TextButton(onClick = { presets = true }) { Text("Preset") }
+                        DropdownMenu(expanded = presets, onDismissRequest = { presets = false }) {
+                            Options.presets.filter { it.first != "custom" }.forEach { (id,label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    editor.endGesture()
+                                    editor.change(TouchLayout.fromPreset(id).copy(opacity=current.opacity, scale=current.scale,
+                                        skin=current.skin, fixedStick=current.fixedStick, stickDeadzone=current.stickDeadzone))
+                                    presets = false
+                                })
+                            }
                         }
                     }
-                } else {
-                    Column(Modifier.fillMaxSize()) {
-                        PreviewArea(
-                            layout = working,
-                            selectedId = selectedId,
-                            menuPreview = menuPreview,
-                            showHidden = showHidden,
-                            showLabels = showLabels,
-                            modifier = Modifier.fillMaxWidth(),
-                            onSelect = { selectedId = it },
-                            aspect = aspect,
-                            onGestureStart = editor::beginGesture,
-                            onGestureEnd = editor::endGesture,
-                            onTransform = { id, x, y, r ->
-                                val place = working.placeOrDefault(id).copy(x = x, y = y, r = r.coerceIn(0.02f, 0.25f))
-                                editor.change(working.withPlace(working.contain(place, aspect)))
-                            },
-                        )
-                        Surface(
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        ) {
-                            EditorPanel(
-                                layout = working,
-                                selectedId = selectedId,
-                                menuPreview = menuPreview,
-                                showHidden = showHidden,
-                                showLabels = showLabels,
-                                onSelect = { selectedId = it },
-                                onMenuPreview = { menuPreview = it },
-                                onShowHidden = { showHidden = it },
-                                onShowLabels = { showLabels = it },
-                                onLayout = { editor.endGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
-                                onSlide = { editor.beginGesture(); editor.change(it.copy(controls = TouchControl.all.associate { c -> c.id to it.contain(it.placeOrDefault(c.id), aspect) })) },
-                                onSlideEnd = editor::endGesture,
-                            )
+                    TextButton(onClick = { tools = !tools }) { Text(if(tools) "Hide tools" else "Show tools") }
+                    Button(onClick = { onSave(editor.layout) }, modifier = Modifier.padding(start=8.dp)) { Text("Save") }
+                }
+            }
+            if(tools) Surface(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top=72.dp).width(316.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)) {
+                Column(Modifier.padding(horizontal=14.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) {
+                            TextButton(onClick = { choosing = true }) { Text(TouchControl.byId[selectedId]?.label ?: "Choose control") }
+                            DropdownMenu(expanded=choosing,onDismissRequest={choosing=false},modifier=Modifier.heightIn(max=240.dp)) {
+                                TouchControl.all.forEach { control -> DropdownMenuItem(text={Text(control.label)},onClick={
+                                    selectedId=control.id; hidden=true; choosing=false
+                                }) }
+                            }
                         }
+                        val control=TouchControl.byId[selectedId]
+                        val place=current.placeOrDefault(selectedId)
+                        TextButton(enabled=control?.keep != true,onClick={
+                            editor.endGesture();editor.change(current.withPlace(place.copy(hidden=!place.hidden)))
+                        }) { Text(if(place.hidden) "Show" else "Hide") }
                     }
+                    val place=current.placeOrDefault(selectedId)
+                    Row { Text("Size",modifier=Modifier.weight(1f));Text("${(place.r*200).roundToInt()}%") }
+                    Slider(value=place.r.coerceIn(0.02f,0.25f),valueRange=0.02f..0.25f,
+                        onValueChange={r -> editor.beginGesture();val now=editor.layout
+                            editor.change(now.withPlace(now.contain(now.placeOrDefault(selectedId).copy(r=r),aspect))) },
+                        onValueChangeFinished=editor::endGesture,modifier=Modifier.height(34.dp))
+                    Row { Text("Opacity",modifier=Modifier.weight(1f));Text("${current.opacity}%") }
+                    Slider(value=current.opacity.toFloat(),valueRange=20f..100f,
+                        onValueChange={v -> editor.beginGesture();editor.change(editor.layout.copy(opacity=v.toInt())) },
+                        onValueChangeFinished=editor::endGesture,modifier=Modifier.height(34.dp))
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        FilterChip(selected=hidden,onClick={hidden=!hidden},label={Text("Hidden")})
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(selected=menus,onClick={menus=!menus},label={Text("Menu keys")})
+                    }
+                    Text("Drag to move · pinch to resize",style=MaterialTheme.typography.labelSmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun EditorHeader(onCancel: () -> Unit, onSave: () -> Unit, canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-        BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()) {
-            val compact = maxWidth < 600.dp
-            val history: @Composable () -> Unit = {
-                IconButton(onClick = onUndo, enabled = canUndo) {
-                    Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = "Undo layout change")
-                }
-                IconButton(onClick = onRedo, enabled = canRedo) {
-                    Icon(Icons.AutoMirrored.Rounded.Redo, contentDescription = "Redo layout change")
-                }
-            }
-            Column {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Close editor")
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text("TOUCH LAYOUT", style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary, letterSpacing = 2.sp)
-                        Text("Move · pinch to resize", style = MaterialTheme.typography.titleMedium)
-                    }
-                    if (!compact) history()
-                    Button(onClick = onSave, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Icon(Icons.Rounded.Check, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Save")
-                    }
-                }
-                if (compact) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    history()
-                    Text("Undo or redo each gesture", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PreviewArea(
-    layout: TouchLayout,
-    selectedId: String?,
-    menuPreview: Boolean,
-    showHidden: Boolean,
-    showLabels: Boolean,
-    modifier: Modifier,
-    onSelect: (String) -> Unit,
-    aspect: Float,
-    onGestureStart: () -> Unit,
-    onGestureEnd: () -> Unit,
-    onTransform: (String, Float, Float, Float) -> Unit,
-) {
-    BoxWithConstraints(
-        modifier = modifier.padding(12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        val height = minOf(maxHeight, maxWidth / aspect)
-        val width = height * aspect
-        GameCanvas(
-            layout = layout,
-            selectedId = selectedId,
-            menuPreview = menuPreview,
-            showHidden = showHidden,
-            showLabels = showLabels,
-            width = width,
-            height = height,
-            onSelect = onSelect,
-            aspect = aspect,
-            onGestureStart = onGestureStart,
-            onGestureEnd = onGestureEnd,
-            onTransform = onTransform,
-        )
     }
 }
 
@@ -610,318 +505,4 @@ private fun DrawScope.DrawGameScene() {
     drawLine(Color.White.copy(alpha = 0.20f), Offset(cx, cy - 12f), Offset(cx, cy - 5f), 1.5f)
     drawLine(Color.White.copy(alpha = 0.20f), Offset(cx, cy + 5f), Offset(cx, cy + 12f), 1.5f)
     drawRect(Color.White.copy(alpha = 0.16f), size = size, style = Stroke(width = 1f))
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun EditorPanel(
-    layout: TouchLayout,
-    selectedId: String?,
-    menuPreview: Boolean,
-    showHidden: Boolean,
-    showLabels: Boolean,
-    onSelect: (String) -> Unit,
-    onMenuPreview: (Boolean) -> Unit,
-    onShowHidden: (Boolean) -> Unit,
-    onShowLabels: (Boolean) -> Unit,
-    onLayout: (TouchLayout) -> Unit,
-    onSlide: (TouchLayout) -> Unit,
-    onSlideEnd: () -> Unit,
-) {
-    val presets = buildList {
-        addAll(Options.presets.filter { it.first != "custom" })
-        if (layout.isCustom()) add("custom" to "Custom")
-    }
-    val selected = selectedId?.let { TouchControl.byId[it] }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Surface(
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Preview", style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = !menuPreview,
-                            onClick = { onMenuPreview(false) },
-                            label = { Text("In play") },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                        FilterChip(
-                            selected = menuPreview,
-                            onClick = { onMenuPreview(true) },
-                            label = { Text("Menus") },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = showHidden,
-                            onClick = { onShowHidden(!showHidden) },
-                            label = { Text("Show hidden") },
-                            leadingIcon = {
-                                Icon(
-                                    if (showHidden) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
-                                    contentDescription = null,
-                                )
-                            },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                        FilterChip(
-                            selected = showLabels,
-                            onClick = { onShowLabels(!showLabels) },
-                            label = { Text("Labels") },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                    }
-                    Text(
-                        "Drag to move. Pinch a control with two fingers to resize. Undo and redo work one gesture at a time.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        item {
-            SettingsGroup("Layout") {
-                ChoiceSetting(
-                    title = "Preset",
-                    subtitle = "Start from another grip. Your moved controls are replaced.",
-                    options = presets.map { it.second },
-                    selectedIndex = presets.indexOfFirst {
-                        it.first == if (layout.isCustom()) "custom" else layout.preset
-                    }.coerceAtLeast(0),
-                    onSelect = { index ->
-                        val id = presets.getOrNull(index)?.first ?: return@ChoiceSetting
-                        if (id == "custom") return@ChoiceSetting
-                        onLayout(
-                            TouchLayout.fromPreset(id).copy(
-                                opacity = layout.opacity,
-                                scale = layout.scale,
-                                skin = layout.skin,
-                                fixedStick = layout.fixedStick,
-                                stickDeadzone = layout.stickDeadzone,
-                            ),
-                        )
-                    },
-                )
-                DividerInset()
-                SliderSetting(
-                    title = "Control size",
-                    subtitle = "On top of each control's own radius.",
-                    valueText = "${layout.scale}%",
-                    value = layout.scale.toFloat(),
-                    range = 50f..150f,
-                    steps = 99,
-                    onValueChange = { v -> onSlide(layout.copy(scale = v.toInt())) },
-                    onValueChangeFinished = onSlideEnd,
-                )
-                DividerInset()
-                SliderSetting(
-                    title = "Opacity",
-                    subtitle = "The game applies this to every touch control.",
-                    valueText = "${layout.opacity}%",
-                    value = layout.opacity.toFloat(),
-                    range = 20f..100f,
-                    steps = 79,
-                    onValueChange = { v -> onSlide(layout.copy(opacity = v.toInt())) },
-                    onValueChangeFinished = onSlideEnd,
-                )
-                DividerInset()
-                ChoiceSetting(
-                    title = "Button style",
-                    options = Options.skins.map { it.second },
-                    selectedIndex = Options.skins.indexOfFirst { it.first == layout.skin }.coerceAtLeast(0),
-                    onSelect = { index -> onLayout(layout.copy(skin = Options.skins[index].first)) },
-                )
-            }
-        }
-
-        item {
-            SettingsGroup("Selected control") {
-                if (selected == null) {
-                    SettingRow(
-                        title = "No control selected",
-                        subtitle = "Tap a control on the preview or pick one below.",
-                    )
-                } else {
-                    val place = layout.placeOrDefault(selected.id)
-                    SettingRow(
-                        title = selected.label,
-                        subtitle = "${selected.group.label} · ${if (place.hidden) "hidden" else "shown"}",
-                        trailing = {
-                            Text(
-                                "${(place.x * 100).roundToInt()}%, ${(place.y * 100).roundToInt()}%",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                    )
-                    DividerInset()
-                    SliderSetting(
-                        title = "Size",
-                        subtitle = if (selected.shape == ControlShape.Rect) {
-                            "Height of the fire rectangle as a share of the screen; its width follows at 1.6×."
-                        } else {
-                            "Radius as a share of the screen height. The global size multiplies it."
-                        },
-                        valueText = "${(place.r * 100).let { String.format(java.util.Locale.US, "%.1f", it) }}%",
-                        value = place.r,
-                        range = 0.02f..0.25f,
-                        steps = 22,
-                        onValueChange = { r ->
-                            onSlide(layout.withPlace(place.copy(r = r)))
-                        },
-                        onValueChangeFinished = onSlideEnd,
-                    )
-                    DividerInset()
-                    SliderSetting(
-                        title = "Horizontal position",
-                        valueText = "${(place.x * 100).roundToInt()}%",
-                        value = place.x,
-                        range = 0f..1f,
-                        steps = 99,
-                        onValueChange = { x -> onSlide(layout.withPlace(place.copy(x = x))) },
-                        onValueChangeFinished = onSlideEnd,
-                    )
-                    DividerInset()
-                    SliderSetting(
-                        title = "Vertical position",
-                        valueText = "${(place.y * 100).roundToInt()}%",
-                        value = place.y,
-                        range = 0f..1f,
-                        steps = 99,
-                        onValueChange = { y -> onSlide(layout.withPlace(place.copy(y = y))) },
-                        onValueChangeFinished = onSlideEnd,
-                    )
-                    DividerInset()
-                    SwitchSetting(
-                        title = "Hide from the game",
-                        subtitle = if (selected.keep) {
-                            "This control is the way back out of the menus and cannot be hidden."
-                        } else {
-                            "The control stays in the file, so you can show it again later."
-                        },
-                        checked = place.hidden,
-                        enabled = !selected.keep,
-                        onCheckedChange = { hidden ->
-                            onLayout(layout.withPlace(place.copy(hidden = hidden && !selected.keep)))
-                        },
-                    )
-                    DividerInset()
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                val d = selected.defaults(layout.preset)
-                                onLayout(
-                                    layout.withPlace(
-                                        ControlPlace(selected.id, d[0], d[1], d[2], selected.defaultHidden),
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.heightIn(min = 52.dp),
-                        ) {
-                            Icon(Icons.Rounded.RestartAlt, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Reset control")
-                        }
-                        TextButton(
-                            onClick = {
-                                val p = layout.placeOrDefault(selected.id)
-                                onLayout(layout.withPlace(p.copy(x = 0.5f, y = 0.5f)))
-                            },
-                            modifier = Modifier.heightIn(min = 52.dp),
-                        ) {
-                            Text("Centre")
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            SettingsGroup("All controls", "Tap a name to select it. The list includes the menu D-pad, Enter and Back.") {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    ControlGroup.entries.forEach { group ->
-                        Text(
-                            group.label.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 1.sp,
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            TouchControl.all.filter { it.group == group }.forEach { control ->
-                                val p = layout.placeOrDefault(control.id)
-                                FilterChip(
-                                    selected = control.id == selectedId,
-                                    onClick = { onSelect(control.id) },
-                                    label = { Text(control.label) },
-                                    leadingIcon = {
-                                        if (p.hidden) {
-                                            Icon(
-                                                Icons.Rounded.VisibilityOff,
-                                                contentDescription = "Hidden",
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            InfoBanner(
-                title = "What gets saved",
-                text = "Preset, opacity, size, skin, and every control's x, y, radius and hidden flag. The fire zone " +
-                    "uses the same values as the round controls, drawn as a 1.6:1 rectangle. The native game reloads " +
-                    "layout.toml when you come back from this screen.",
-            )
-        }
-
-        item {
-            OutlinedButton(
-                onClick = {
-                    onLayout(
-                        TouchLayout.fromPreset(layout.preset).copy(
-                            opacity = layout.opacity,
-                            scale = layout.scale,
-                            skin = layout.skin,
-                                fixedStick = layout.fixedStick,
-                                stickDeadzone = layout.stickDeadzone,
-                        ),
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp),
-            ) {
-                Icon(Icons.Rounded.RestartAlt, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text("Reset every control to the ${layout.preset} preset")
-            }
-        }
-    }
 }

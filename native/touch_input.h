@@ -11,9 +11,22 @@ enum class FreeTouchRole { None, Stick, Look };
 // Buttons and menus have already claimed their touches before movement/look routing.
 inline FreeTouchRole RouteFreeTouch(bool fixed, bool inside_stick, bool on_left, bool stick_owned) {
     if ((fixed ? inside_stick : on_left) && !stick_owned) return FreeTouchRole::Stick;
-    if (on_left && stick_owned) return FreeTouchRole::None;
+    if (on_left || inside_stick) return FreeTouchRole::None;
     return FreeTouchRole::Look;
 }
+
+// Preserve sub-count motion instead of dropping every slow/high-refresh touch event.
+struct LookAccumulator {
+    float x = 0, y = 0;
+    struct Counts { int x, y; };
+    Counts add(float dx, float dy, float counts_per_pixel) {
+        x += dx * counts_per_pixel;
+        y += dy * counts_per_pixel;
+        int ix = int(x), iy = int(y);
+        x -= float(ix); y -= float(iy);
+        return {ix, iy};
+    }
+};
 
 struct StickVector { float x, y; };
 inline StickVector RemapStick(float x, float y, float deadzone) {

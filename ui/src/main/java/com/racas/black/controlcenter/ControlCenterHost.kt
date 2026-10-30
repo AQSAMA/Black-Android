@@ -38,6 +38,8 @@ interface ControlCenterHost {
     val settingsStore: SettingsStore
     val preferencesStore: InterfacePreferencesStore
 
+    val supportsLiveEditor: Boolean get() = false
+    fun editControlsInGame() { toast("Live editing is available in the full game") }
     fun refreshGameStatus()
     fun requestStorageAccess()
     fun importGame(uri: Uri)

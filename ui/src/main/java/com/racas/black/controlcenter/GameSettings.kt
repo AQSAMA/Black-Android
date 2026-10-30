@@ -25,7 +25,7 @@ data class GameSettings(
     val hdr: Boolean = false,
 
     // Touch controls
-    val touchSensitivity: Float = 1.0f,
+    val touchSensitivity: Float = 2.0f,
     val touchLayout: TouchLayout = TouchLayout.preset("default"),
 
     // Motion
@@ -73,7 +73,7 @@ data class TouchLayout(
     val scale: Int = 100,
     val skin: String = "modern",
     val controls: Map<String, ControlPlace> = emptyMap(),
-    val fixedStick: Boolean = false,
+    val fixedStick: Boolean = true,
     val stickDeadzone: Int = 8,
 ) {
     fun place(id: String): ControlPlace? = controls[id] ?: TouchControl.byId[id]?.let { c ->
@@ -160,7 +160,7 @@ data class TouchControl(
     companion object {
         val all: List<TouchControl> = listOf(
             TouchControl("fire", "Fire", ControlGroup.Play, false, floatArrayOf(0.924f, 0.660f, 0.095f, 0.900f, 0.680f, 0.080f, 0.900f, 0.700f, 0.075f)),
-            TouchControl("fire_left", "Fire (left)", ControlGroup.Play, false, floatArrayOf(0.059f, 0.400f, 0.065f, 0.070f, 0.320f, 0.085f, 0.070f, 0.320f, 0.085f)),
+            TouchControl("fire_left", "Fire (left)", ControlGroup.Play, false, floatArrayOf(0.059f, 0.400f, 0.065f, 0.070f, 0.320f, 0.085f, 0.070f, 0.320f, 0.085f), defaultHidden = true),
             TouchControl("aim", "Aim", ControlGroup.Play, false, floatArrayOf(0.969f, 0.400f, 0.065f, 0.955f, 0.420f, 0.060f, 0.930f, 0.300f, 0.070f)),
             TouchControl("mode", "Firing mode", ControlGroup.Play, false, floatArrayOf(0.910f, 0.400f, 0.045f, 0.875f, 0.420f, 0.042f, 0.970f, 0.550f, 0.040f)),
             TouchControl("melee", "Melee", ControlGroup.Play, false, floatArrayOf(0.843f, 0.560f, 0.050f, 0.800f, 0.600f, 0.045f, 0.780f, 0.550f, 0.045f)),

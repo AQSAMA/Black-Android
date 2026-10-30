@@ -95,16 +95,22 @@ void ReloadSettingsIfChanged() {
     next = now + std::chrono::milliseconds(250);
     static std::string seen;
     std::ifstream in(app::ExeDir() / ".settings-changed");
-    if (!in) return;
     std::string stamp;
-    std::getline(in, stamp);
-    if (stamp.empty() || stamp == seen) return;
-    seen = stamp;
-    // the layout is drawn by the main and render threads; the game's own options are applied on the game thread in
-    // host::ApplyPendingSettings, where the game itself writes them
-    touch::ReloadLayout();
-    host::RequestSettingsApply();
-    LOGI("settings: reload queued for the game thread");
+    if (in) std::getline(in, stamp);
+    if (!stamp.empty() && stamp != seen) {
+        seen = stamp;
+        touch::ReloadLayout();
+        host::RequestSettingsApply();
+        LOGI("settings: reload queued for the game thread");
+    }
+    // The modern settings surface can hand straight back to the real game HUD editor.
+    // Reload the layout before entering it, so a just-saved Compose draft is the starting point.
+    std::error_code error;
+    auto edit = app::ExeDir() / ".edit-controls";
+    if (std::filesystem::remove(edit, error)) {
+        touch::ReloadLayout();
+        touch::EditLayout();
+    }
 }
 
 // SDL's display mode in landscape: the window is not up yet when the settings load

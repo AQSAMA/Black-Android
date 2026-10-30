@@ -71,8 +71,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 enum class ControlSection(val id: String, val title: String, val icon: ImageVector) {
-    Home("home", "Overview", Icons.Rounded.Home),
-    Display("display", "Display", Icons.Rounded.Monitor),
+    Home("home", "Play", Icons.Rounded.Home),
+    Display("display", "Graphics", Icons.Rounded.Monitor),
     Controls("controls", "Controls", Icons.Rounded.Gamepad),
     Audio("audio", "Audio", Icons.Rounded.VolumeUp),
     More("more", "More", Icons.Rounded.MoreHoriz),
@@ -101,7 +101,7 @@ fun BlackControlCenter(host: ControlCenterHost) {
         val game by host.gameStatus.collectAsState()
         val update by host.updateState.collectAsState()
         var settings by remember { mutableStateOf(host.settingsStore.load()) }
-        var sectionId by rememberSaveable { mutableStateOf(ControlSection.Home.id) }
+        var sectionId by rememberSaveable { mutableStateOf(ControlSection.Controls.id) }
         var editingLayout by rememberSaveable { mutableStateOf(false) }
         val section = ControlSection.of(sectionId)
         val reduceMotion = LocalReduceMotion.current
@@ -163,207 +163,21 @@ fun BlackControlCenter(host: ControlCenterHost) {
             return@BlackControlCenterTheme
         }
 
-        val title = if (section == ControlSection.Home) "Control Center" else section.title
-        // topappbar takes a non-null icon slot, so the primary pages pass an empty one
-        val noIcon: @Composable () -> Unit = {}
-        val backToMore: @Composable () -> Unit = {
-            IconButton(onClick = { sectionId = ControlSection.More.id }) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to More")
-            }
-        }
-
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val showRailBrand = maxHeight >= 480.dp
-            val wide = maxWidth >= 640.dp && maxWidth > maxHeight
-            val useRail = when (prefs.navigation) {
-                NavigationStyle.Rail -> true
-                NavigationStyle.Bottom -> false
-                NavigationStyle.Auto -> wide
-            }
-
-            val screen: @Composable (Boolean) -> Unit = { compact ->
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    containerColor = Color.Transparent,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    snackbarHost = {
-                        SnackbarHost(
-                            hostState = snackbar,
-                            modifier = if (compact) Modifier else
-                                Modifier.windowInsetsPadding(WindowInsets.navigationBars),
-                        )
-                    },
-                    topBar = {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    title,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            navigationIcon = if (section.primary) noIcon else backToMore,
-                            actions = {
-                                if (game is GameStatus.Ready || host.isPreview) {
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            if (flushSettings()) host.launchGame()
-                                        },
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.PlayArrow,
-                                            contentDescription = if (game is GameStatus.Ready) "Play Black" else "Start game",
-                                        )
-                                    }
-                                    Spacer(Modifier.width(12.dp))
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                                scrolledContainerColor = MaterialTheme.colorScheme.surface,
-                            ),
-                            windowInsets = WindowInsets.statusBars,
-                        )
-                    },
-                    bottomBar = {
-                        if (compact) {
-                            ControlBottomBar(section) { sectionId = it.id }
-                        }
-                    },
-                ) { padding ->
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(padding),
-                    ) {
-                        Crossfade(
-                            targetState = section,
-                            modifier = Modifier.fillMaxSize(),
-                            animationSpec = if (reduceMotion) snap() else tween(durationMillis = 180),
-                            label = "section",
-                        ) { current ->
-                            when (current) {
-                                ControlSection.Home -> HomeScreen(
-                                    game = game,
-                                    version = host.appVersion,
-                                    preview = host.isPreview,
-                                    onPlay = {
-                                        if (flushSettings()) host.launchGame()
-                                    },
-                                    onImport = { uri -> host.importGame(uri) },
-                                    onRequestStorage = { host.requestStorageAccess() },
-                                    onOpenSection = { sectionId = it.id },
-                                    onEditLayout = { editingLayout = true },
-                                )
-                                ControlSection.Display -> DisplayScreen(
-                                    settings = settings,
-                                    onSettings = { block -> settings = block(settings) },
-                                )
-                                ControlSection.Controls -> ControlsScreen(
-                                    settings = settings,
-                                    onSettings = { block -> settings = block(settings) },
-                                    onEditLayout = { editingLayout = true },
-                                )
-                                ControlSection.Audio -> AudioScreen(
-                                    settings = settings,
-                                    onSettings = { block -> settings = block(settings) },
-                                )
-                                ControlSection.More -> MoreScreen(
-                                    version = host.appVersion,
-                                    preview = host.isPreview,
-                                    update = update,
-                                    onCheckUpdates = { host.checkForUpdates() },
-                                    onOpenUrl = { host.openUrl(it) },
-                                    onOpenSection = { sectionId = it.id },
-                                )
-                                ControlSection.Interface -> InterfaceScreen(
-                                    prefs = prefs,
-                                    onPrefs = { block -> host.preferencesStore.update(block) },
-                                )
-                                ControlSection.Cheats -> CheatsScreen(
-                                    settings = settings,
-                                    onSettings = { block -> settings = block(settings) },
-                                )
-                                ControlSection.About -> AboutScreen(
-                                    host = host,
-                                    prefs = prefs,
-                                    version = host.appVersion,
-                                    settings = settings,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (useRail) {
-                Row(Modifier.fillMaxSize()) {
-                    NavigationRail(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        modifier = Modifier
-                            .width(104.dp)
-                            .fillMaxHeight()
-                            .windowInsetsPadding(WindowInsets.statusBars),
-                        header = {
-                            if (showRailBrand) Surface(
-                                modifier = Modifier
-                                    .padding(top = 12.dp)
-                                    .size(52.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        "B",
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    )
-                                }
-                            }
-                        },
-                    ) {
-                        Spacer(Modifier.height(8.dp))
-                        ControlSection.navBar.forEach { entry ->
-                            NavigationRailItem(
-                                selected = entry == section ||
-                                    (entry == ControlSection.More && !section.primary),
-                                onClick = { sectionId = entry.id },
-                                icon = {
-                                    Icon(entry.icon, contentDescription = null, modifier = Modifier.size(26.dp))
-                                },
-                                label = {
-                                    Text(
-                                        entry.title,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                    Box(Modifier.weight(1f)) { screen(false) }
-                }
-            } else {
-                screen(true)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ControlBottomBar(selected: ControlSection, onSelect: (ControlSection) -> Unit) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-        ControlSection.navBar.forEach { entry ->
-            NavigationBarItem(
-                selected = entry == selected || (entry == ControlSection.More && !selected.primary),
-                onClick = { onSelect(entry) },
-                icon = { Icon(entry.icon, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                label = {
-                    Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
+        Box(Modifier.fillMaxSize()) {
+            BattleSettings(host, settings, game, section,
+                onSection = { sectionId = it.id },
+                onSettings = { block -> settings = block(settings) },
+                onPreview = { editingLayout = true },
+                onPlay = { if (flushSettings()) host.launchGame() },
+                onLive = { if (flushSettings()) host.editControlsInGame() },
+                advanced = { current -> when(current) {
+                    ControlSection.Interface -> InterfaceScreen(prefs) { block -> host.preferencesStore.update(block) }
+                    ControlSection.Cheats -> CheatsScreen(settings) { block -> settings = block(settings) }
+                    ControlSection.About -> AboutScreen(host, prefs, host.appVersion, settings)
+                    else -> Unit
+                } },
             )
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

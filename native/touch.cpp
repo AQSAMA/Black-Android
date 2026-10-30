@@ -576,7 +576,7 @@ struct Place {
 using Layout = std::array<Place, kButtonCount + 1>;
 // the thumbs alone: fire under the right thumb, the left fire beside the stick
 constexpr Layout kTwoFinger = {{
-    {0.924f, 0.66f, 0.095f}, {0.059f, 0.40f, 0.065f}, {0.969f, 0.40f, 0.065f}, {0.91f, 0.40f, 0.045f},
+    {0.924f, 0.66f, 0.095f}, {0.059f, 0.40f, 0.065f, true}, {0.969f, 0.40f, 0.065f}, {0.91f, 0.40f, 0.045f},
     {0.843f, 0.56f, 0.05f}, {0.789f, 0.40f, 0.055f}, {0.784f, 0.70f, 0.05f}, {0.838f, 0.84f, 0.055f},
     {0.964f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
@@ -590,7 +590,7 @@ constexpr Layout kTwoFinger = {{
 }};
 // claw with the left index finger: fire at the top left, the right thumb turns and aims
 constexpr Layout kThreeFinger = {{
-    {0.90f, 0.68f, 0.08f}, {0.07f, 0.32f, 0.085f}, {0.955f, 0.42f, 0.06f}, {0.875f, 0.42f, 0.042f},
+    {0.90f, 0.68f, 0.08f}, {0.07f, 0.32f, 0.085f, true}, {0.955f, 0.42f, 0.06f}, {0.875f, 0.42f, 0.042f},
     {0.80f, 0.60f, 0.045f}, {0.765f, 0.40f, 0.05f}, {0.745f, 0.76f, 0.045f}, {0.84f, 0.87f, 0.05f},
     {0.955f, 0.88f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
@@ -604,7 +604,7 @@ constexpr Layout kThreeFinger = {{
 }};
 // both index fingers on top: fire at the top left, aim and crouch at the top right
 constexpr Layout kFourFinger = {{
-    {0.90f, 0.70f, 0.075f}, {0.07f, 0.32f, 0.085f}, {0.93f, 0.30f, 0.07f}, {0.97f, 0.55f, 0.04f},
+    {0.90f, 0.70f, 0.075f}, {0.07f, 0.32f, 0.085f, true}, {0.93f, 0.30f, 0.07f}, {0.97f, 0.55f, 0.04f},
     {0.78f, 0.55f, 0.045f}, {0.73f, 0.38f, 0.05f}, {0.72f, 0.75f, 0.045f}, {0.80f, 0.87f, 0.05f},
     {0.83f, 0.24f, 0.05f}, {0.50f, 0.90f, 0.05f}, {0.559f, 0.90f, 0.045f}, {0.473f, 0.07f, 0.04f},
     {0.527f, 0.07f, 0.04f}, {0.419f, 0.07f, 0.04f},
@@ -626,6 +626,7 @@ constexpr Preset kPresets[] = {
 
 constexpr float kStickZone = 0.42f;    // share of the width from the left a touch takes the stick in
 constexpr float kLookCounts = 1800.0f;  // mouse counts a swipe across the screen's width turns: 90 degrees
+constexpr uint64_t kEditHoldMs = 550;
 constexpr uint64_t kShownMs = 8000;     // the controls hide this long after the last touch while a pad is plugged in
 
 // a touch in the menus is a tap, a swipe up or down that scrolls, or the cursor held down (a slider dragged): which,
@@ -642,6 +643,7 @@ struct Finger {
     size_t button = 0;     // or kStick, dragged in the editor
     float x0 = 0, y0 = 0;  // where it went down, pixels; in the editor, its offset from the control's centre
     float x = 0, y = 0;    // where it is
+    detail::LookAccumulator look;
     MenuTouch menu = MenuTouch::Undecided;
     uint64_t down_ms = 0;
     float notch_y = 0;  // a scroll's place at its last notch
@@ -692,7 +694,7 @@ float Height() {
 
 std::filesystem::path LayoutFile() { return app::ExeDir() / "layout.toml"; }
 
-bool g_fixed_stick = false;
+bool g_fixed_stick = true;
 int g_stick_deadzone = 8;
 
 void LoadLayout() {
@@ -705,7 +707,7 @@ void LoadLayout() {
         g_layout = *kPresets[g_preset].places;
         g_opacity = std::clamp(float(t["opacity"].value_or(double(g_opacity))), 0.2f, 1.0f);
         g_scale = std::clamp(float(t["scale"].value_or(double(g_scale))), 0.5f, 1.5f);
-        g_fixed_stick = t["fixed_stick"].value_or(false);
+        g_fixed_stick = t["fixed_stick"].value_or(true);
         g_stick_deadzone = std::clamp(int(t["stick_deadzone"].value_or(int64_t(8))), 0, 30);
         std::string skin = t["skin"].value_or(std::string(kSkinIds[g_skin]));
         for (uint32_t i = 0; i < kSkins; i++)
@@ -720,6 +722,12 @@ void LoadLayout() {
             pl.r = std::clamp(float((*p)["r"].value_or(double(pl.r))), 0.02f, 0.25f);
             pl.hidden = (*p)["hidden"].value_or(pl.hidden) && i != kStick && !kButtons[i].keep;
         }
+        if (t["version"].value_or(int64_t(1)) < 2) {
+            g_layout[0].hidden = false;
+            for (size_t i = 0; i < kButtonCount; i++)
+                if (std::string_view(kButtons[i].id) == "fire_left" || std::string_view(kButtons[i].id) == "fire_zone")
+                    g_layout[i].hidden = true;
+        }
     } catch (...) {
     }
 }
@@ -731,7 +739,7 @@ void SaveLayout() {
         controls.insert(i == kStick ? "stick" : kButtons[i].id,
                         toml::table{{"x", double(p.x)}, {"y", double(p.y)}, {"r", double(p.r)}, {"hidden", p.hidden}});
     }
-    toml::table t{{"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"scale", double(g_scale)},
+    toml::table t{{"version", int64_t(2)}, {"preset", kPresets[g_preset].id}, {"opacity", double(g_opacity)}, {"scale", double(g_scale)},
                   {"skin", kSkinIds[g_skin]}, {"fixed_stick", g_fixed_stick},
                   {"stick_deadzone", g_stick_deadzone}, {"controls", controls}};
     std::ofstream(LayoutFile()) << t << "\n";
@@ -787,9 +795,9 @@ void FireZoneBounds(size_t i, float& x0, float& y0, float& x1, float& y1) {
 
 // the editor's bar at the top: Reset, smaller and bigger for the picked control, hide or show it, Cancel, Done, in
 // screen shares
-constexpr const char* kBarLabels[] = {"RESET", "-", "+", "HIDE", "CANCEL", "DONE"};
+constexpr const char* kBarLabels[] = {"RESET", "-", "+", "HIDE", "EXIT", "SAVE"};
 enum { kBarReset, kBarSmaller, kBarBigger, kBarHide, kBarCancel, kBarDone, kBarCount };
-constexpr float kBarY = 0.17f, kBarH = 0.09f, kBarW = 0.14f, kBarGap = 0.02f;
+constexpr float kBarY = 0.025f, kBarH = 0.095f, kBarW = 0.13f, kBarGap = 0.012f;
 constexpr float kBarSizeW = 0.07f;                       // the - and + buttons
 constexpr float kMinRadius = 0.02f, kMaxRadius = 0.25f;  // a control's own radius, in screen heights
 constexpr float kSizeStep = 1.1f;                        // a tap on - or +
@@ -956,7 +964,7 @@ void FingerDown(SDL_FingerID id, float x, float y) {
         f.role = Role::Button;
         f.button = b;
         f.down_ms = NowMs();
-        if (kButtons[b].press == kPanel) app::ToggleMenu();
+        // Settings opens on release; holding the gear edits directly over the current frame.
         if (kButtons[b].press == kGyro) gyro::NextMode();
     } else if (InMenus()) {
         // not the cursor yet: a tap clicks where it lifts, a swipe scrolls without moving the cursor
@@ -1053,14 +1061,21 @@ void FingerMove(SDL_FingerID id, float x, float y) {
         if (f.role == Role::Stick) UpdateStick(f);
         if (f.role == Role::Look || (f.role == Role::Button && kButtons[f.button].look)) {
             float k = kLookCounts / Width();
-            input::g_touch_dx += int(std::lround(dx * k));
-            input::g_touch_dy += int(std::lround(dy * k));
+            auto counts = f.look.add(dx, dy, k);
+            input::g_touch_dx += counts.x;
+            input::g_touch_dy += counts.y;
         }
         if (f.role == Role::Cursor) MenuMove(f);
     }
 }
 
 void FingerUp(SDL_FingerID id) {
+    for (const Finger& f : g_fingers) {
+        if (!g_editing && f.id == id && f.role == Role::Button && kButtons[f.button].press == kPanel) {
+            if (NowMs() - f.down_ms >= kEditHoldMs) OpenEditor();
+            else app::ToggleMenu();
+        }
+    }
     for (const Finger& f : g_fingers) {
         if (f.id != id || f.role != Role::Cursor) continue;
         if (f.menu == MenuTouch::Undecided) {
@@ -1508,15 +1523,15 @@ void DrawEditorBar(ImDrawList* dl, float th) {
         // - and + wait for a control to be picked, hide for one that can be
         int alpha = (size && g_selected < 0) || (i == kBarHide && !Hideable(g_selected)) ? 90 : 240;
         dl->AddRectFilled(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]),
-                          done ? IM_COL32(150, 115, 45, 235) : IM_COL32(20, 18, 14, 225), h * 0.015f);
-        dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(220, 180, 100, alpha), h * 0.015f, 0, th * 0.7f);
+                          done ? IM_COL32(236, 183, 53, 245) : IM_COL32(21, 31, 43, 235), h * 0.015f);
+        dl->AddRect(ImVec2(r[0], r[1]), ImVec2(r[2], r[3]), IM_COL32(125, 145, 165, alpha), h * 0.015f, 0, th * 0.7f);
         CentredText(dl, ImVec2((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), h * (size ? 0.06f : 0.042f),
-                    IM_COL32(255, 255, 255, alpha), app::Ui(BarLabel(i)).c_str());
+                    done ? IM_COL32(18, 24, 30, alpha) : IM_COL32(245, 248, 250, alpha), app::Ui(BarLabel(i)).c_str());
     }
-    CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.05f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
-                app::Ui("DRAG TO MOVE, PINCH OR - + TO RESIZE").c_str());
-    CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.1f) * h), h * 0.036f, IM_COL32(255, 255, 255, 220),
-                app::Ui("TAP A CONTROL, THEN HIDE OR SHOW").c_str());
+    std::string selected = g_selected < 0 ? "SELECT A BUTTON  /  DRAG TO MOVE  /  PINCH TO RESIZE"
+        : std::string(g_selected == int(kStick) ? "MOVE" : kButtons[g_selected].label) + "  /  DRAG OR PINCH";
+    CentredText(dl, ImVec2(Width() / 2, (kBarY + kBarH + 0.045f) * h), h * 0.026f,
+                IM_COL32(235, 240, 245, 230), selected.c_str());
 }
 
 // the modern control: dark glass, a thin edge, a soft shadow and the icon in warm ink; the accent fills it while held
@@ -1525,12 +1540,12 @@ void DrawModernButton(ImDrawList* dl, size_t i, bool on, bool hidden, float th) 
     Centre(i, cx, cy);
     float r = Radius(i) * (on ? 0.93f : 1.0f);
     int fade = hidden ? 40 : 100;
-    ImU32 fill = on ? Fade(217, 168, 78, 82) : Fade(8, 8, 10, 95 * fade / 100);
+    ImU32 fill = on ? Fade(217, 168, 78, 82) : Fade(18, 26, 36, 52 * fade / 100);
     ImU32 edge = on ? Fade(255, 214, 140, 240) : Fade(255, 255, 255, 92 * fade / 100);
-    dl->AddCircleFilled(ImVec2(cx, cy + th * 1.6f), r, Fade(0, 0, 0, 75 * fade / 100), 48);
+
     dl->AddCircleFilled(ImVec2(cx, cy), r, fill, 48);
     dl->AddCircle(ImVec2(cx, cy), r, edge, 48, th * 0.9f);
-    dl->AddCircle(ImVec2(cx, cy), r * 0.84f, Fade(255, 255, 255, (on ? 50 : 24) * fade / 100), 48, th * 0.5f);
+
     DrawIcon({dl, ImVec2(cx, cy), r * 0.66f,
               on ? Fade(255, 248, 224, 255) : Fade(255, 255, 255, 225 * fade / 100), th * 1.1f},
              kButtons[i].icon);
