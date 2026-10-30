@@ -125,7 +125,8 @@ fun LayoutEditorScreen(
                 onRedo = editor::redo,
             )
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                val wide = maxWidth >= 900.dp
+                val panelWidth = if (maxWidth >= 900.dp) 360.dp else 300.dp
+                val wide = maxWidth >= 600.dp && maxWidth > maxHeight
                 if (wide) {
                     Row(Modifier.fillMaxSize()) {
                         PreviewArea(
@@ -148,7 +149,7 @@ fun LayoutEditorScreen(
                         )
                         Surface(
                             Modifier
-                                .width(388.dp)
+                                .width(panelWidth)
                                 .fillMaxHeight(),
                             color = MaterialTheme.colorScheme.surfaceContainerLowest,
                         ) {
@@ -216,44 +217,39 @@ fun LayoutEditorScreen(
 
 @Composable
 private fun EditorHeader(onCancel: () -> Unit, onSave: () -> Unit, canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        shadowElevation = 6.dp,
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 10.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onCancel, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close editor")
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+        BoxWithConstraints(Modifier.fillMaxWidth().statusBarsPadding()) {
+            val compact = maxWidth < 600.dp
+            val history: @Composable () -> Unit = {
+                IconButton(onClick = onUndo, enabled = canUndo) {
+                    Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = "Undo layout change")
+                }
+                IconButton(onClick = onRedo, enabled = canRedo) {
+                    Icon(Icons.AutoMirrored.Rounded.Redo, contentDescription = "Redo layout change")
+                }
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "TOUCH LAYOUT",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 2.sp,
-                )
-                Text(
-                    "Move · pinch to resize",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
-            IconButton(onClick = onUndo, enabled = canUndo) {
-                Icon(Icons.AutoMirrored.Rounded.Undo, contentDescription = "Undo layout change")
-            }
-            IconButton(onClick = onRedo, enabled = canRedo) {
-                Icon(Icons.AutoMirrored.Rounded.Redo, contentDescription = "Redo layout change")
-            }
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = onSave, modifier = Modifier.heightIn(min = 52.dp)) {
-                Icon(Icons.Rounded.Check, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text("Save layout")
+            Column {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onCancel, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close editor")
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("TOUCH LAYOUT", style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary, letterSpacing = 2.sp)
+                        Text("Move · pinch to resize", style = MaterialTheme.typography.titleMedium)
+                    }
+                    if (!compact) history()
+                    Button(onClick = onSave, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Icon(Icons.Rounded.Check, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Save")
+                    }
+                }
+                if (compact) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    history()
+                    Text("Undo or redo each gesture", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
+                }
             }
         }
     }
@@ -406,16 +402,20 @@ private fun GameCanvas(
                                 latestOnStart()
                                 try {
                                     var pointer = down.id
+                                    var transformed = latestLayout.contain(latestLayout.placeOrDefault(control.id), aspect)
                                     do {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == pointer && it.pressed }
                                             ?: event.changes.firstOrNull { it.pressed } ?: break
                                         pointer = change.id
-                                        val current = latestLayout.placeOrDefault(control.id)
                                         val delta = change.positionChange()
                                         val zoom = event.calculateZoom()
-                                        latestOnTransform(control.id, current.x + delta.x / widthPx,
-                                            current.y + delta.y / heightPx, current.r * zoom)
+                                        transformed = latestLayout.contain(transformed.copy(
+                                            x = transformed.x + delta.x / widthPx,
+                                            y = transformed.y + delta.y / heightPx,
+                                            r = (transformed.r * zoom).coerceIn(0.02f, 0.25f),
+                                        ), aspect)
+                                        latestOnTransform(control.id, transformed.x, transformed.y, transformed.r)
                                         event.changes.forEach { it.consume() }
                                     } while (event.changes.any { it.pressed })
                                 } finally { latestOnEnd() }
