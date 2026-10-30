@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LayoutEditorStateTest {
+    @Test fun defaultLayoutHasExactlyOneFireButton() {
+        for (preset in listOf("default", "three", "four")) {
+            val layout = TouchLayout.fromPreset(preset)
+            assertEquals(preset, 1, listOf("fire", "fire_left", "fire_zone").count { !layout.placeOrDefault(it).hidden })
+        }
+    }
+
     @Test fun dragIsOneUndoAndNewEditClearsRedo() {
         val original = TouchLayout.fromPreset("default")
         val state = LayoutEditorState(original)

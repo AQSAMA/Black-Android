@@ -49,6 +49,8 @@ fun ControlsScreen(
     settings: GameSettings,
     onSettings: ((GameSettings) -> GameSettings) -> Unit,
     onEditLayout: () -> Unit,
+    onEditInGame: () -> Unit,
+    supportsLiveEditor: Boolean,
 ) {
     var capturing by remember { mutableStateOf<Bindings.Action?>(null) }
     val layout = settings.touchLayout
@@ -61,12 +63,25 @@ fun ControlsScreen(
 
     SettingsPage {
         item {
-            PageHeader(
-                eyebrow = "Hands on",
-                title = "Controls",
-                subtitle = "Every touch button, the layout, gyroscope, controller sticks, mouse and keyboard. " +
-                    "Nothing here is locked to a preset.",
+            SliderSetting(
+                title = "Camera speed",
+                valueText = String.format(java.util.Locale.US, "%.2f×", settings.touchSensitivity),
+                value = settings.touchSensitivity.coerceIn(0.25f, 12f),
+                range = 0.25f..12f,
+                onValueChange = { v -> onSettings { it.copy(touchSensitivity = v) } },
             )
+        }
+        item {
+            SettingsGroup("Customize HUD") {
+                if (supportsLiveEditor) ActionSetting(
+                    title = "Edit in game",
+                    subtitle = "Hold and release the settings gear for about 0.55 seconds to edit the actual game HUD.",
+                    button = "Edit in game",
+                    icon = Icons.Rounded.Gesture,
+                    onClick = onEditInGame,
+                )
+                ActionSetting(title = "Preview editor", button = "Open preview", icon = Icons.Rounded.Gesture, onClick = onEditLayout)
+            }
         }
         item {
             SettingsGroup("Movement", "Tune how the left thumb moves your character.") {
@@ -185,16 +200,6 @@ fun ControlsScreen(
         }
         item {
             SettingsGroup("Aim") {
-                SliderSetting(
-                    title = "Touch sensitivity",
-                    subtitle = "How far a drag on the right side turns the view. Separate from the mouse.",
-                    valueText = String.format(java.util.Locale.US, "%.1f×", settings.touchSensitivity),
-                    value = settings.touchSensitivity,
-                    range = 0.1f..5.0f,
-                    steps = 48,
-                    onValueChange = { v -> onSettings { it.copy(touchSensitivity = round1(v)) } },
-                )
-                DividerInset()
                 SegmentedSetting(
                     title = "Gyroscope",
                     subtitle = "Use the phone's motion sensor, or a DualShock 4 / DualSense gyro.",

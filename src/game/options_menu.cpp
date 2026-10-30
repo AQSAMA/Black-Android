@@ -664,14 +664,28 @@ void Tick(X86Context& ctx, uint32_t ui) {
     Page& p = g_page;
     const char* name = static_cast<const char*>(HostPtr(ui + kPageName));
     const Host* host = FindHost(name);
-    // Controller calibration now lives in the same modern settings surface as touch and gyro.
-    if (host && !host->entries) { p = {}; g_next = g_last = 0; return; }
+    static bool settings_handed_off = false;
     bool running = host && R32(flash::kPlayerReady) == 1 && R32(flash::kPlayer) && R32(ui + kPageReady) == kPageRunning;
     if (!running) {
+        settings_handed_off = false;
         if (*name && !host) g_next = g_last = 0;
         p = {};
         return;
     }
+    // All ordinary options entries use the modern landscape surface. Back out of the stock Flash
+    // settings page before handing off, so returning to play cannot reveal a duplicate legacy UI.
+    // Credits still use their own content and back path.
+    if (g_credits_back.empty() && p.mode != kCreditsMode) {
+        W32(ui + kMenuInput, kInputBack);
+        if (!settings_handed_off) {
+            settings_handed_off = true;
+            host::OpenControlCenter();
+        }
+        p = {};
+        g_next = g_last = 0;
+        return;
+    }
+    settings_handed_off = false;
     uint32_t going = R32(ui + kPageLeaving);
     bool leaving = going || R32(ui + kPageAsked) == 1;
     uint32_t root = flash::Level(flash::kMenuLevel);

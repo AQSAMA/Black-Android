@@ -34,7 +34,7 @@ fun InterfaceScreen(
                 eyebrow = "Make it yours",
                 title = "Interface",
                 subtitle = "The Control Center is built from Material 3 components with large touch targets. " +
-                    "Theme, accent, scale, corner shape and navigation are yours.",
+                    "Theme, accent, scale and corner shape are yours.",
             )
         }
         item {
@@ -114,14 +114,7 @@ fun InterfaceScreen(
                     steps = 9,
                     onValueChange = { v -> onPrefs { it.copy(fontScale = round05(v)) } },
                 )
-                DividerInset()
-                SegmentedSetting(
-                    title = "Navigation",
-                    subtitle = "Automatic uses the side rail on tablets and landscape phones.",
-                    options = NavigationStyle.entries.map { it.label },
-                    selectedIndex = NavigationStyle.entries.indexOf(prefs.navigation),
-                    onSelect = { i -> onPrefs { it.copy(navigation = NavigationStyle.entries[i]) } },
-                )
+
             }
         }
         item {
@@ -192,7 +185,7 @@ fun InterfaceScreen(
             SettingsGroup("Reset") {
                 ActionSetting(
                     title = "Restore interface defaults",
-                    subtitle = "OLED black, brass accent, 100% scale, round corners, automatic navigation.",
+                    subtitle = "OLED black, brass accent, 100% scale and round corners.",
                     button = "Restore",
                     icon = Icons.Rounded.RestartAlt,
                     onClick = { onPrefs { InterfacePreferences() } },

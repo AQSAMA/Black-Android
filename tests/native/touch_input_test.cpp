@@ -11,12 +11,20 @@ int main() {
     assert(RouteFreeTouch(false, true, true, true) == FreeTouchRole::None);
     assert(RouteFreeTouch(false, false, false, true) == FreeTouchRole::Look);
     // Fixed: touches away from the stick still aim, including the unoccupied left side.
-    assert(RouteFreeTouch(true, false, true, false) == FreeTouchRole::Look);
+    assert(RouteFreeTouch(true, false, true, false) == FreeTouchRole::None);
     assert(RouteFreeTouch(true, true, true, false) == FreeTouchRole::Stick);
     assert(RouteFreeTouch(true, true, true, true) == FreeTouchRole::None);
     // A customized stick can sit on the right; it still has only one owner.
     assert(RouteFreeTouch(true, true, false, false) == FreeTouchRole::Stick);
-    assert(RouteFreeTouch(true, true, false, true) == FreeTouchRole::Look);
+    assert(RouteFreeTouch(true, true, false, true) == FreeTouchRole::None);
+
+    // A long, slow swipe must equal a fast swipe even when every event is less than one mouse count.
+    LookAccumulator slow;
+    int sx = 0, sy = 0;
+    for (int i = 0; i < 1000; i++) { auto c = slow.add(0.125f, -0.125f, 0.75f); sx += c.x; sy += c.y; }
+    LookAccumulator fast;
+    auto one = fast.add(125.0f, -125.0f, 0.75f);
+    assert(sx == one.x && sy == one.y && sx > 90);
 
     // No drift at rest or inside the deadzone; full travel reaches full speed on every axis.
     for (float deadzone : {0.0f, 0.08f, 0.3f}) {

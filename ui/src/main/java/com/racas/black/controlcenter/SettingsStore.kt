@@ -59,7 +59,9 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
             fog = appDoc.bool("", "fog") ?: true,
             antiAliasing = appDoc.long("", "anti_aliasing")?.toInt() ?: 0,
             hdr = appDoc.bool("", "hdr") ?: false,
-            touchSensitivity = appDoc.double("", "touch_sensitivity")?.toFloat() ?: 1.0f,
+            touchSensitivity = (appDoc.double("", "touch_sensitivity")?.toFloat() ?: 2.0f).let {
+                if ((layoutDoc.long("", "version") ?: 1) < 2) maxOf(2.0f, it) else it
+            }.coerceIn(0.25f, 12f),
             touchLayout = layout,
             gyroMode = android.long("", "gyro")?.toInt() ?: 0,
             gyroSensitivity = android.double("", "gyro_sensitivity")?.toFloat() ?: 1.5f,
@@ -175,6 +177,7 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
 
     private fun layoutToml(layout: TouchLayout): String {
         val b = TomlWriter.Builder()
+            .topLevel("version", 2)
             .topLevel("preset", layout.preset)
             .topLevel("opacity", (layout.opacity.coerceIn(20, 100).toDouble() / 100.0))
             .topLevel("scale", (layout.scale.coerceIn(50, 150).toDouble() / 100.0))
@@ -215,8 +218,12 @@ class TomlSettingsStore(private val root: File) : SettingsStore {
                 (((table["hidden"] as? TomlValue.Bool)?.value) ?: control.defaultHidden) && !control.keep,
             )
         }
+        if ((doc.long("", "version") ?: 1) < 2) {
+            for (id in listOf("fire_left", "fire_zone")) places[id] = places.getValue(id).copy(hidden = true)
+            places["fire"] = places.getValue("fire").copy(hidden = false)
+        }
         return TouchLayout(base, opacity, scale, skin, places,
-            doc.bool("", "fixed_stick") ?: false,
+            doc.bool("", "fixed_stick") ?: true,
             (doc.long("", "stick_deadzone")?.toInt() ?: 8).coerceIn(0, 30),
         )
     }

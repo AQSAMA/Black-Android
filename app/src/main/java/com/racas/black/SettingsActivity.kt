@@ -228,6 +228,20 @@ private class AppHost(private val activity: SettingsActivity) : ControlCenterHos
         return c == p || c.startsWith(p + File.separator)
     }
 
+    override val supportsLiveEditor: Boolean get() = true
+    override fun editControlsInGame() {
+        if (_game.value !is GameStatus.Ready) {
+            toast("Choose your game files before opening the live editor")
+            return
+        }
+        try {
+            File(settingsStore.directory, ".edit-controls").writeText("edit")
+            launchGame()
+        } catch (error: Exception) {
+            toast("Could not open live controls editor. Check storage access.")
+        }
+    }
+
     override fun launchGame() {
         val intent = Intent(activity, BlackActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)

@@ -47,12 +47,12 @@ private fun scheme(accent: Accent, dark: Boolean, oled: Boolean, highContrast: B
     val seed = accentColor(accent)
     val onSeed = if (seed.luminance() > 0.45f) Color(0xFF120D05) else Color.White
     if (dark) {
-        val bg = if (oled) Color.Black else Color(0xFF0B0A09).mix(seed, 0.015f)
-        val surface = if (oled) Color(0xFF050505) else Color(0xFF12100E)
-        val container = if (oled) Color(0xFF0A0A0A) else Color(0xFF1A1714)
+        val bg = if (oled) Color.Black else Color(0xFF0D141E)
+        val surface = if (oled) Color(0xFF050505) else Color(0xFF121D2B)
+        val container = if (oled) Color(0xFF0A0A0A) else Color(0xFF1B2A3B)
         val high = if (highContrast) Color(0xFFEDEAE4) else Color(0xFFE8E5DF)
-        val muted = if (highContrast) Color(0xFFD6D2CB) else Color(0xFFBDB8B0)
-        val outline = if (highContrast) Color(0xFF9C9790) else Color(0xFF5A554E)
+        val muted = if (highContrast) Color(0xFFD6D2CB) else Color(0xFFACBBCB)
+        val outline = if (highContrast) Color(0xFF9C9790) else Color(0xFF415368)
         return darkColorScheme(
             primary = seed,
             onPrimary = onSeed,
@@ -75,7 +75,7 @@ private fun scheme(accent: Accent, dark: Boolean, oled: Boolean, highContrast: B
             onSurfaceVariant = muted,
             surfaceTint = seed,
             inverseSurface = Color(0xFFE8E5DF),
-            inverseOnSurface = Color(0xFF1A1714),
+            inverseOnSurface = Color(0xFF1B2A3B),
             error = Color(0xFFFFB4AB),
             onError = Color(0xFF690005),
             errorContainer = Color(0xFF93000A),
